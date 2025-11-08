@@ -4,6 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def main():
     cmd = ["docker", "run", "-it", "--rm"]
 
@@ -27,6 +28,7 @@ def main():
     except KeyboardInterrupt:
         print("\nInterrupted by user")
         sys.exit(130)
+
 
 if __name__ == "__main__":
     main()

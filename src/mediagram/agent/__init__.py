@@ -144,9 +144,7 @@ class Agent:
         self.model = llm.get_async_model(self.model_id)
         self.conversation.model = self.model
 
-        return AgentResponse(
-            text=f"Model changed to: {model_name}"
-        )
+        return AgentResponse(text=f"Model changed to: {model_name}")
 
     def _cmd_tools(self, args: list[str]) -> AgentResponse:
         """List all available tools"""
