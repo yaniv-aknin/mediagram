@@ -1,6 +1,8 @@
 import os
+import mistune
 from telegram import Update
 from telegram.constants import ParseMode
+from telegram.error import TelegramError
 from telegram.ext import (
     ApplicationBuilder,
     MessageHandler,
@@ -9,6 +11,7 @@ from telegram.ext import (
 )
 
 from mediagram.agent import Agent
+from .html import convert_to_telegram_html
 
 
 class TelegramDriver:
@@ -46,13 +49,18 @@ class TelegramDriver:
             await update.message.reply_text(f"Error: {response.error}")
             return
 
-        # Try to render with Markdown, fallback to plain text
+        # Convert Markdown to HTML for Telegram
         try:
+            # mistune.html with default settings escapes HTML, preventing arbitrary HTML injection
+            html_text = mistune.html(response.text)
+            # Convert to Telegram-compatible HTML using proper HTML parsing
+            html_text = convert_to_telegram_html(html_text)
+            await update.message.reply_text(html_text, parse_mode=ParseMode.HTML)
+        except TelegramError as e:
+            # If HTML rendering fails, show a proper error message
             await update.message.reply_text(
-                response.text, parse_mode=ParseMode.MARKDOWN_V2
+                f"⚠️ There was an error processing your request: {e}"
             )
-        except Exception:
-            await update.message.reply_text(response.text)
 
     def run(self) -> None:
         token = os.getenv("TELEGRAM_BOT_TOKEN")
