@@ -35,4 +35,4 @@ RUN uv tool install /tmp/*.whl && rm /tmp/*.whl
 
 SHELL ["/bin/bash", "-c"]
 WORKDIR /workspace
-CMD ["mediagram"]
+CMD ["mediagram.telegram"]

@@ -19,20 +19,18 @@ A conversational AI assistant that works via Telegram or command-line interface,
 
 ## Usage
 
-### Telegram Bot (default)
+### Telegram Bot
 
 Run the Telegram bot:
 
 ```bash
-uv run mediagram
-# or explicitly:
-uv run mediagram --driver=telegram
+uv run mediagram.telegram
 ```
 
 With a specific model:
 
 ```bash
-uv run mediagram --model=sonnet
+uv run mediagram.telegram --model=sonnet
 ```
 
 ### CLI Mode
@@ -40,14 +38,22 @@ uv run mediagram --model=sonnet
 Chat directly in your terminal:
 
 ```bash
-uv run mediagram --driver=cli
+uv run mediagram.cli
 ```
 
 With a specific model:
 
 ```bash
-uv run mediagram --driver=cli --model=sonnet
+uv run mediagram.cli --model=sonnet
 ```
+
+You can also pass messages as arguments for non-interactive mode:
+
+```bash
+uv run mediagram.cli "how are you?" "/tools" "which tool calls are available to you?"
+```
+
+This will send each message, print the response, and exit after processing all inputs.
 
 ## Commands
 

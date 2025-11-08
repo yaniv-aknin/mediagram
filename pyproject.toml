@@ -15,7 +15,8 @@ dependencies = [
 ]
 
 [project.scripts]
-mediagram = "mediagram:app"
+"mediagram.cli" = "mediagram.cli:app"
+"mediagram.telegram" = "mediagram.telegram:app"
 
 [build-system]
 requires = ["uv_build>=0.9.8,<0.10.0"]

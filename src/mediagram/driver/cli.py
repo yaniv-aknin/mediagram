@@ -1,5 +1,6 @@
 import asyncio
 import os
+from typing import Protocol
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import InMemoryHistory
 
@@ -7,12 +8,51 @@ from mediagram.agent import Agent
 from mediagram.agent.callbacks import ToolProgress, ToolSuccess, ToolError
 
 
+class InputSource(Protocol):
+    """Protocol for input sources that provide user messages."""
+
+    async def get_input(self, prompt: str) -> str | None:
+        """Get next input. Returns None to signal EOF."""
+        ...
+
+
+class InteractiveInputSource:
+    """Interactive input source using prompt_toolkit."""
+
+    def __init__(self) -> None:
+        self.session = PromptSession(history=InMemoryHistory())
+
+    async def get_input(self, prompt: str) -> str | None:
+        try:
+            return await self.session.prompt_async(prompt)
+        except (KeyboardInterrupt, EOFError):
+            return None
+
+
+class PreDefinedInputSource:
+    """Pre-defined input source from a list of messages."""
+
+    def __init__(self, messages: list[str]) -> None:
+        self.messages = messages
+        self.index = 0
+
+    async def get_input(self, prompt: str) -> str | None:
+        if self.index >= len(self.messages):
+            return None
+        message = self.messages[self.index]
+        self.index += 1
+        print(f"{prompt}{message}")
+        return message
+
+
 class CLIDriver:
     """Thin adapter layer for CLI - handles terminal I/O."""
 
-    def __init__(self, default_model: str = "haiku"):
+    def __init__(
+        self, default_model: str = "haiku", input_source: InputSource | None = None
+    ):
         self.agent = Agent(default_model, driver_callbacks=self)
-        self.session = PromptSession(history=InMemoryHistory())
+        self.input_source = input_source or InteractiveInputSource()
         self.username = os.getenv("USER", "user")
         self.name = self.username
 
@@ -51,7 +91,11 @@ class CLIDriver:
 
         while True:
             try:
-                user_input = await self.session.prompt_async("You: ")
+                user_input = await self.input_source.get_input("You: ")
+
+                if user_input is None:
+                    print("Goodbye!")
+                    break
 
                 if not user_input.strip():
                     continue
@@ -74,16 +118,14 @@ class CLIDriver:
                 # Display response
                 print(f"Bot: {response.text}\n")
 
-            except (KeyboardInterrupt, EOFError):
-                print("\nGoodbye!")
-                break
             except Exception as e:
                 print(f"Unexpected error: {e}")
+                break
 
     def run(self) -> None:
         asyncio.run(self.run_async())
 
 
-def run(model: str = "haiku") -> None:
-    driver = CLIDriver(default_model=model)
+def run(model: str = "haiku", input_source: InputSource | None = None) -> None:
+    driver = CLIDriver(default_model=model, input_source=input_source)
     driver.run()
