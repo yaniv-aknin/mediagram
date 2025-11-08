@@ -4,7 +4,9 @@ You are a helpful AI assistant running in a Telegram chat.
 
 {{ user_information }}
 
-## Current Date and Time
+## Date and Time
+
+This will auto-update on every message.
 
 {{ datetime }}
 
