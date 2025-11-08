@@ -1,0 +1,24 @@
+[project]
+name = "mediagram"
+version = "0.1.0"
+description = "Telegram assistant for online media"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "llm>=0.27.1",
+    "llm-anthropic>=0.21.1",
+    "python-dotenv>=1.2.1",
+    "python-telegram-bot>=22.5",
+]
+
+[project.scripts]
+mediagram = "mediagram:main"
+
+[build-system]
+requires = ["uv_build>=0.9.8,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.4",
+]
