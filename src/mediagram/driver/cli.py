@@ -4,16 +4,40 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import InMemoryHistory
 
 from mediagram.agent import Agent
+from mediagram.agent.callbacks import ToolProgress, ToolSuccess, ToolError
 
 
 class CLIDriver:
     """Thin adapter layer for CLI - handles terminal I/O."""
 
     def __init__(self, default_model: str = "haiku"):
-        self.agent = Agent(default_model)
+        self.agent = Agent(default_model, driver_callbacks=self)
         self.session = PromptSession(history=InMemoryHistory())
         self.username = os.getenv("USER", "user")
         self.name = self.username
+
+    async def on_tool_progress(self, progress: ToolProgress) -> None:
+        """Handle tool progress updates."""
+        percentage = (
+            f" ({progress.completion_ratio * 100:.0f}%)"
+            if progress.completion_ratio is not None
+            else ""
+        )
+        eta = (
+            f" - ETA: {progress.completion_eta_minutes:.1f}m"
+            if progress.completion_eta_minutes is not None
+            else ""
+        )
+        print(f"🔄 {progress.text}{percentage}{eta}")
+
+    async def on_tool_success(self, success: ToolSuccess) -> None:
+        """Handle tool success."""
+        print(f"✅ {success.text}")
+
+    async def on_tool_error(self, error: ToolError) -> None:
+        """Handle tool errors."""
+        details = f" - {error.error_details}" if error.error_details else ""
+        print(f"❌ {error.text}{details}")
 
     def _print_welcome(self) -> None:
         print(f"Mediagram CLI - Using model: {self.agent.model_name}")

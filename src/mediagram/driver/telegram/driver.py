@@ -11,6 +11,7 @@ from telegram.ext import (
 )
 
 from mediagram.agent import Agent
+from mediagram.agent.callbacks import ToolProgress, ToolSuccess, ToolError
 from .html import convert_to_telegram_html
 
 
@@ -20,16 +21,93 @@ class TelegramDriver:
     def __init__(self, default_model: str = "haiku"):
         self.default_model = default_model
         self.user_agents: dict[int, Agent] = {}
+        self.current_update: Update | None = None
+        self.current_context: ContextTypes.DEFAULT_TYPE | None = None
+        self.progress_messages: dict[str, int] = {}
+
+    async def on_tool_progress(self, progress: ToolProgress) -> None:
+        """Handle tool progress updates."""
+        if not self.current_update or not self.current_context:
+            return
+
+        percentage = (
+            f" ({progress.completion_ratio * 100:.0f}%)"
+            if progress.completion_ratio is not None
+            else ""
+        )
+        eta = (
+            f" - ETA: {progress.completion_eta_minutes:.1f}m"
+            if progress.completion_eta_minutes is not None
+            else ""
+        )
+        message = f"🔄 {progress.text}{percentage}{eta}"
+
+        try:
+            if progress.tool_id in self.progress_messages:
+                await self.current_context.bot.edit_message_text(
+                    chat_id=self.current_update.effective_chat.id,
+                    message_id=self.progress_messages[progress.tool_id],
+                    text=message,
+                )
+            else:
+                sent = await self.current_context.bot.send_message(
+                    chat_id=self.current_update.effective_chat.id, text=message
+                )
+                self.progress_messages[progress.tool_id] = sent.message_id
+        except TelegramError:
+            pass
+
+    async def on_tool_success(self, success: ToolSuccess) -> None:
+        """Handle tool success."""
+        if not self.current_update or not self.current_context:
+            return
+
+        try:
+            if success.tool_id in self.progress_messages:
+                await self.current_context.bot.delete_message(
+                    chat_id=self.current_update.effective_chat.id,
+                    message_id=self.progress_messages[success.tool_id],
+                )
+                del self.progress_messages[success.tool_id]
+            await self.current_context.bot.send_message(
+                chat_id=self.current_update.effective_chat.id,
+                text=f"✅ {success.text}",
+            )
+        except TelegramError:
+            pass
+
+    async def on_tool_error(self, error: ToolError) -> None:
+        """Handle tool errors."""
+        if not self.current_update or not self.current_context:
+            return
+
+        details = f" - {error.error_details}" if error.error_details else ""
+        try:
+            if error.tool_id in self.progress_messages:
+                await self.current_context.bot.delete_message(
+                    chat_id=self.current_update.effective_chat.id,
+                    message_id=self.progress_messages[error.tool_id],
+                )
+                del self.progress_messages[error.tool_id]
+            await self.current_context.bot.send_message(
+                chat_id=self.current_update.effective_chat.id,
+                text=f"❌ {error.text}{details}",
+            )
+        except TelegramError:
+            pass
 
     def _get_or_create_agent(self, user_id: int) -> Agent:
         if user_id not in self.user_agents:
-            self.user_agents[user_id] = Agent(self.default_model)
+            self.user_agents[user_id] = Agent(self.default_model, driver_callbacks=self)
         return self.user_agents[user_id]
 
     async def message_handler(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
         """Route message to agent and send response back to Telegram."""
+        self.current_update = update
+        self.current_context = context
+
         user_id = update.effective_user.id
         user_message = update.message.text
         user = update.effective_user

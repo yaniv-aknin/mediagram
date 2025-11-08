@@ -1,8 +1,13 @@
 from datetime import datetime
 from importlib.resources import files
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 import llm
+
+from .tools import ALL_TOOLS
+
+if TYPE_CHECKING:
+    from .callbacks import DriverCallbacks
 
 
 AVAILABLE_MODELS = {
@@ -76,11 +81,21 @@ class CommandRouter:
 
 
 class Agent:
-    def __init__(self, model_name: str = "haiku"):
+    def __init__(
+        self,
+        model_name: str = "haiku",
+        driver_callbacks: "DriverCallbacks | None" = None,
+    ):
         self.model_name = model_name
         self.model_id = AVAILABLE_MODELS[model_name]
         self.model = llm.get_async_model(self.model_id)
-        self.conversation = self.model.conversation()
+        self.driver_callbacks = driver_callbacks
+        self.tools = list(ALL_TOOLS)
+        self.conversation = self.model.conversation(
+            tools=self.tools,
+            before_call=self._before_tool_call,
+            after_call=self._after_tool_call,
+        )
         self.system_prompt_template = load_system_prompt_template()
         self.router = CommandRouter()
         self._register_commands()
@@ -89,10 +104,26 @@ class Agent:
         """Register all available commands."""
         self.router.register("clear", self._cmd_clear)
         self.router.register("model", self._cmd_model)
+        self.router.register("tools", self._cmd_tools)
+
+    async def _before_tool_call(self, tool, tool_call):
+        """Hook called before a tool is executed."""
+        from .tools import set_driver_callbacks
+
+        if self.driver_callbacks:
+            set_driver_callbacks(self.driver_callbacks)
+
+    async def _after_tool_call(self, tool, tool_call, tool_result):
+        """Hook called after a tool is executed."""
+        pass
 
     def _cmd_clear(self, args: list[str]) -> AgentResponse:
         """Clear conversation history and start fresh"""
-        self.conversation = self.model.conversation()
+        self.conversation = self.model.conversation(
+            tools=self.tools,
+            before_call=self._before_tool_call,
+            after_call=self._after_tool_call,
+        )
         return AgentResponse(text="Chat history cleared. Starting a new conversation.")
 
     def _cmd_model(self, args: list[str]) -> AgentResponse:
@@ -111,11 +142,42 @@ class Agent:
         self.model_name = model_name
         self.model_id = AVAILABLE_MODELS[model_name]
         self.model = llm.get_async_model(self.model_id)
-        self.conversation = self.model.conversation()
+        self.conversation = self.model.conversation(
+            tools=self.tools,
+            before_call=self._before_tool_call,
+            after_call=self._after_tool_call,
+        )
 
         return AgentResponse(
             text=f"Model changed to: {model_name}\nNote: Conversation history has been cleared."
         )
+
+    def _cmd_tools(self, agent: "Agent", args: list[str]) -> AgentResponse:
+        """List all available tools"""
+        if not agent.tools:
+            return AgentResponse(text="No tools available.")
+
+        lines = ["Available tools:"]
+        for tool in agent.tools:
+            tool_name = tool.__name__
+            tool_doc = tool.__doc__ or "No description"
+            tool_doc_clean = " ".join(line.strip() for line in tool_doc.split("\n"))
+
+            import inspect
+
+            sig = inspect.signature(tool)
+            params = []
+            for param_name, param in sig.parameters.items():
+                if param.annotation != inspect.Parameter.empty:
+                    params.append(f"{param_name}: {param.annotation.__name__}")
+                else:
+                    params.append(param_name)
+
+            params_str = ", ".join(params)
+            lines.append(f"\n  {tool_name}({params_str})")
+            lines.append(f"    {tool_doc_clean}")
+
+        return AgentResponse(text="\n".join(lines))
 
     async def handle_message(
         self,
@@ -142,8 +204,8 @@ class Agent:
             system_prompt = render_system_prompt(
                 self.system_prompt_template, name, username, language
             )
-            response = self.conversation.prompt(message, system=system_prompt)
-            response_text = await response.text()
+            chain_response = self.conversation.chain(message, system=system_prompt)
+            response_text = await chain_response.text()
             return AgentResponse(text=response_text)
         except Exception as e:
             return AgentResponse(text="", error=str(e))
