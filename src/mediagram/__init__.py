@@ -1,5 +1,6 @@
 import typer
 from enum import Enum
+from pathlib import Path
 from dotenv import load_dotenv
 from typing_extensions import Annotated
 
@@ -29,7 +30,10 @@ def main(
     ] = ModelChoice.haiku,
 ) -> None:
     """Mediagram - Chat with Claude via Telegram or CLI"""
-    load_dotenv()
+    if not load_dotenv():
+        fallback_env = Path.home() / ".mediagram.d" / "dotenv"
+        if fallback_env.exists():
+            load_dotenv(fallback_env)
 
     if driver_name == DriverChoice.telegram:
         driver.telegram.run(model.value)
