@@ -77,7 +77,7 @@ class CommandRouter:
             )
 
         handler = self.commands[command]
-        return handler(agent, args)
+        return handler(args)
 
 
 class Agent:
@@ -152,13 +152,13 @@ class Agent:
             text=f"Model changed to: {model_name}\nNote: Conversation history has been cleared."
         )
 
-    def _cmd_tools(self, agent: "Agent", args: list[str]) -> AgentResponse:
+    def _cmd_tools(self, args: list[str]) -> AgentResponse:
         """List all available tools"""
-        if not agent.tools:
+        if not self.tools:
             return AgentResponse(text="No tools available.")
 
         lines = ["Available tools:"]
-        for tool in agent.tools:
+        for tool in self.tools:
             tool_name = tool.__name__
             tool_doc = tool.__doc__ or "No description"
             tool_doc_clean = " ".join(line.strip() for line in tool_doc.split("\n"))
