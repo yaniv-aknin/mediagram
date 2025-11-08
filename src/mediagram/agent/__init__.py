@@ -142,14 +142,10 @@ class Agent:
         self.model_name = model_name
         self.model_id = AVAILABLE_MODELS[model_name]
         self.model = llm.get_async_model(self.model_id)
-        self.conversation = self.model.conversation(
-            tools=self.tools,
-            before_call=self._before_tool_call,
-            after_call=self._after_tool_call,
-        )
+        self.conversation.model = self.model
 
         return AgentResponse(
-            text=f"Model changed to: {model_name}\nNote: Conversation history has been cleared."
+            text=f"Model changed to: {model_name}"
         )
 
     def _cmd_tools(self, args: list[str]) -> AgentResponse:
