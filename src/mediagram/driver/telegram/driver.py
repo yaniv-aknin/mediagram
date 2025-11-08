@@ -34,6 +34,10 @@ class TelegramDriver:
         user_message = update.message.text
         user = update.effective_user
 
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id, action="typing"
+        )
+
         agent = self._get_or_create_agent(user_id)
 
         # Let agent handle the message (commands or regular messages)
