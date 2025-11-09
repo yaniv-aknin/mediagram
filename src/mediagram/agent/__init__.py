@@ -112,10 +112,13 @@ class Agent:
 
     async def _before_tool_call(self, tool, tool_call):
         """Hook called before a tool is executed."""
-        from .tools import set_driver_callbacks
+        from .tools import set_driver_callbacks, set_tool_subdir
 
         if self.driver_callbacks:
             set_driver_callbacks(self.driver_callbacks)
+
+        if self.media_manager and self.media_manager.current_subdir:
+            set_tool_subdir(self.media_manager.current_subdir)
 
     async def _after_tool_call(self, tool, tool_call, tool_result):
         """Hook called after a tool is executed."""
@@ -169,7 +172,9 @@ class Agent:
             params = []
             for param_name, param in sig.parameters.items():
                 if param.annotation != inspect.Parameter.empty:
-                    params.append(f"{param_name}: {param.annotation.__name__}")
+                    params.append(
+                        f"{param_name}: {self._format_annotation(param.annotation)}"
+                    )
                 else:
                     params.append(param_name)
 
@@ -178,6 +183,12 @@ class Agent:
             lines.append(f"    {tool_doc_clean}")
 
         return AgentResponse(text="\n".join(lines))
+
+    def _format_annotation(self, annotation) -> str:
+        """Format a type annotation for display."""
+        if hasattr(annotation, "__name__"):
+            return annotation.__name__
+        return str(annotation).replace("typing.", "")
 
     def _cmd_name(self, args: list[str]) -> AgentResponse:
         """Name the current conversation (usage: /name [name])"""
@@ -191,9 +202,7 @@ class Agent:
         try:
             new_subdir = self.media_manager.rename_subdir(name)
             if name:
-                return AgentResponse(
-                    text=f"Conversation named: {new_subdir.name}"
-                )
+                return AgentResponse(text=f"Conversation named: {new_subdir.name}")
             else:
                 return AgentResponse(
                     text=f"Conversation made permanent: {new_subdir.name}"
