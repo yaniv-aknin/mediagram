@@ -5,7 +5,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import InMemoryHistory
 
 from mediagram.agent import Agent
-from mediagram.agent.callbacks import ToolProgress, ToolSuccess, ToolError
+from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
 
 
 class InputSource(Protocol):
@@ -56,7 +56,7 @@ class CLIDriver:
         self.username = os.getenv("USER", "user")
         self.name = self.username
 
-    async def on_tool_progress(self, progress: ToolProgress) -> None:
+    async def on_tool_progress(self, progress: ProgressMessage, tool_id: str) -> None:
         """Handle tool progress updates."""
         percentage = (
             f" ({progress.completion_ratio * 100:.0f}%)"
@@ -70,13 +70,13 @@ class CLIDriver:
         )
         print(f"🔄 {progress.text}{percentage}{eta}")
 
-    async def on_tool_success(self, success: ToolSuccess) -> None:
+    async def on_tool_success(self, success: SuccessMessage, tool_id: str) -> None:
         """Handle tool success."""
         print(f"✅ {success.text}")
 
-    async def on_tool_error(self, error: ToolError) -> None:
+    async def on_tool_error(self, error: ErrorMessage, tool_id: str) -> None:
         """Handle tool errors."""
-        details = f" - {error.error_details}" if error.error_details else ""
+        details = f" - {error.error}" if error.error else ""
         print(f"❌ {error.text}{details}")
 
     def _print_welcome(self) -> None:

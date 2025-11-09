@@ -11,7 +11,7 @@ from telegram.ext import (
 )
 
 from mediagram.agent import Agent
-from mediagram.agent.callbacks import ToolProgress, ToolSuccess, ToolError
+from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
 from .html import convert_to_telegram_html
 
 
@@ -25,7 +25,7 @@ class TelegramDriver:
         self.current_context: ContextTypes.DEFAULT_TYPE | None = None
         self.progress_messages: dict[str, int] = {}
 
-    async def on_tool_progress(self, progress: ToolProgress) -> None:
+    async def on_tool_progress(self, progress: ProgressMessage, tool_id: str) -> None:
         """Handle tool progress updates."""
         if not self.current_update or not self.current_context:
             return
@@ -43,32 +43,32 @@ class TelegramDriver:
         message = f"🔄 {progress.text}{percentage}{eta}"
 
         try:
-            if progress.tool_id in self.progress_messages:
+            if tool_id in self.progress_messages:
                 await self.current_context.bot.edit_message_text(
                     chat_id=self.current_update.effective_chat.id,
-                    message_id=self.progress_messages[progress.tool_id],
+                    message_id=self.progress_messages[tool_id],
                     text=message,
                 )
             else:
                 sent = await self.current_context.bot.send_message(
                     chat_id=self.current_update.effective_chat.id, text=message
                 )
-                self.progress_messages[progress.tool_id] = sent.message_id
+                self.progress_messages[tool_id] = sent.message_id
         except TelegramError:
             pass
 
-    async def on_tool_success(self, success: ToolSuccess) -> None:
+    async def on_tool_success(self, success: SuccessMessage, tool_id: str) -> None:
         """Handle tool success."""
         if not self.current_update or not self.current_context:
             return
 
         try:
-            if success.tool_id in self.progress_messages:
+            if tool_id in self.progress_messages:
                 await self.current_context.bot.delete_message(
                     chat_id=self.current_update.effective_chat.id,
-                    message_id=self.progress_messages[success.tool_id],
+                    message_id=self.progress_messages[tool_id],
                 )
-                del self.progress_messages[success.tool_id]
+                del self.progress_messages[tool_id]
             await self.current_context.bot.send_message(
                 chat_id=self.current_update.effective_chat.id,
                 text=f"✅ {success.text}",
@@ -76,19 +76,19 @@ class TelegramDriver:
         except TelegramError:
             pass
 
-    async def on_tool_error(self, error: ToolError) -> None:
+    async def on_tool_error(self, error: ErrorMessage, tool_id: str) -> None:
         """Handle tool errors."""
         if not self.current_update or not self.current_context:
             return
 
-        details = f" - {error.error_details}" if error.error_details else ""
+        details = f" - {error.error}" if error.error else ""
         try:
-            if error.tool_id in self.progress_messages:
+            if tool_id in self.progress_messages:
                 await self.current_context.bot.delete_message(
                     chat_id=self.current_update.effective_chat.id,
-                    message_id=self.progress_messages[error.tool_id],
+                    message_id=self.progress_messages[tool_id],
                 )
-                del self.progress_messages[error.tool_id]
+                del self.progress_messages[tool_id]
             await self.current_context.bot.send_message(
                 chat_id=self.current_update.effective_chat.id,
                 text=f"❌ {error.text}{details}",
