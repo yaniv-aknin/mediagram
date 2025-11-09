@@ -5,16 +5,11 @@ from typing import Callable, TYPE_CHECKING
 import llm
 
 from .tools import ALL_TOOLS
+from mediagram.config import AVAILABLE_MODELS
 
 if TYPE_CHECKING:
     from .callbacks import DriverCallbacks
     from mediagram.media import MediaManager
-
-
-AVAILABLE_MODELS = {
-    "haiku": "claude-haiku-4.5",
-    "sonnet": "claude-sonnet-4.5",
-}
 
 
 def load_system_prompt_template() -> str:

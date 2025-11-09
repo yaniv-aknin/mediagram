@@ -12,12 +12,15 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "python-telegram-bot>=22.5",
     "typer>=0.20.0",
+    "yt-dlp>=2025.11.12",
 ]
 
 [project.scripts]
 "mediagram.cli" = "mediagram.cli:app"
 "mediagram.telegram" = "mediagram.telegram:app"
 "mediagram.tool" = "mediagram.tool:app"
+"mgtools.ffmpeg" = "mediagram.mgtools.ffmpeg_wrapper:main"
+"mgtools.yt-dlp" = "mediagram.mgtools.yt_dlp_wrapper:main"
 
 [build-system]
 requires = ["uv_build>=0.9.8,<0.10.0"]

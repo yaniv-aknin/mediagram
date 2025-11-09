@@ -4,6 +4,21 @@ from enum import Enum
 from dataclasses import dataclass
 from typing_extensions import Annotated
 import typer
+import functools
+
+
+AVAILABLE_MODELS = {
+    "haiku": "claude-haiku-4.5",
+    "sonnet": "claude-sonnet-4.5",
+}
+
+
+def patch_docstring(func):
+    """Decorator that patches {available_models} in docstrings with current model list."""
+    if func.__doc__:
+        model_list = ", ".join(f'"{k}"' for k in AVAILABLE_MODELS.keys())
+        func.__doc__ = func.__doc__.replace("{available_models}", model_list)
+    return func
 
 
 class ModelChoice(str, Enum):

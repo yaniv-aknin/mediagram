@@ -5,11 +5,48 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
-from mediagram.agent.tools import ALL_TOOLS
+from mediagram.agent.tools import ALL_TOOLS, set_driver_callbacks
+from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
 
 app = typer.Typer()
 
 _global_cwd = "."
+
+
+class ToolCLICallbacks:
+    """Simple callbacks for tool CLI that prints progress to stdout."""
+
+    async def on_tool_progress(self, progress: ProgressMessage, tool_id: str) -> None:
+        """Handle tool progress updates."""
+        percentage = (
+            f" ({progress.completion_ratio * 100:.0f}%)"
+            if progress.completion_ratio is not None
+            else ""
+        )
+        eta = (
+            f" - ETA: {progress.completion_eta_minutes:.1f}m"
+            if progress.completion_eta_minutes is not None
+            else ""
+        )
+        print(f"🔄 {progress.text}{percentage}{eta}")
+
+    async def on_tool_success(self, success: SuccessMessage, tool_id: str) -> None:
+        """Handle tool success."""
+        if "\n" in success.text:
+            indented = "\n".join(f"   {line}" for line in success.text.split("\n"))
+            print(f"✅\n{indented}")
+        else:
+            print(f"✅ {success.text}")
+
+    async def on_tool_error(self, error: ErrorMessage, tool_id: str) -> None:
+        """Handle tool errors."""
+        details = f" - {error.error}" if error.error else ""
+        full_text = f"{error.text}{details}"
+        if "\n" in full_text:
+            indented = "\n".join(f"   {line}" for line in full_text.split("\n"))
+            print(f"❌\n{indented}")
+        else:
+            print(f"❌ {full_text}")
 
 
 @app.callback()
@@ -44,8 +81,12 @@ def create_tool_command(tool_func):
                 ]
 
         async def run():
-            result = await tool_func(**kwargs)
-            print(result)
+            # Set up callbacks for progress reporting
+            callbacks = ToolCLICallbacks()
+            set_driver_callbacks(callbacks)
+
+            # The result is already printed via callbacks
+            await tool_func(**kwargs)
 
         asyncio.run(run())
 

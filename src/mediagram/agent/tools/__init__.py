@@ -152,3 +152,5 @@ async def _process_message(
 from .sleep import sleep  # noqa: F401, E402
 from .filesystem import listdir, grep, rename  # noqa: F401, E402
 from .respond import respond  # noqa: F401, E402
+from .media import ffmpeg, youtube_download  # noqa: F401, E402
+from .llm import llm  # noqa: F401, E402
