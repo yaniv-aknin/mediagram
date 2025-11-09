@@ -1,7 +1,6 @@
 import json
 import re
 import tempfile
-from pathlib import Path
 
 from mediagram.media import MediaManager
 

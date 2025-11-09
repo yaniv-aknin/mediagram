@@ -54,10 +54,15 @@ class CLIDriver:
         default_model: str = "haiku",
         input_source: InputSource | None = None,
         media_dir_override: str | None = None,
+        max_turns: int = 5,
     ):
         self.media_manager = MediaManager.create(media_dir_override)
+        self.media_manager.create_subdir()
         self.agent = Agent(
-            default_model, driver_callbacks=self, media_manager=self.media_manager
+            default_model,
+            driver_callbacks=self,
+            media_manager=self.media_manager,
+            max_turns=max_turns,
         )
         self.input_source = input_source or InteractiveInputSource()
         self.username = os.getenv("USER", "user")
@@ -140,10 +145,12 @@ def run(
     model: str = "haiku",
     input_source: InputSource | None = None,
     media_dir_override: str | None = None,
+    max_turns: int = 5,
 ) -> None:
     driver = CLIDriver(
         default_model=model,
         input_source=input_source,
         media_dir_override=media_dir_override,
+        max_turns=max_turns,
     )
     driver.run()

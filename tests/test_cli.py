@@ -28,7 +28,7 @@ def test_cli_help_command():
         assert subdir.name.startswith(".")
         assert subdir.name.endswith(".0")
 
-        messages_file = subdir / "messages.jsonl"
+        messages_file = subdir / ".messages.jsonl"
         assert messages_file.exists()
 
         with messages_file.open() as f:

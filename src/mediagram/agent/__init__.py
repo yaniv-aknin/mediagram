@@ -32,13 +32,20 @@ def get_user_info_text(name: str, username: str | None, language: str | None) ->
 
 
 def render_system_prompt(
-    template: str, name: str, username: str | None = None, language: str | None = None
+    template: str,
+    name: str,
+    username: str | None = None,
+    language: str | None = None,
+    max_turns: int = 5,
 ) -> str:
     user_info = get_user_info_text(name, username, language)
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z").strip()
+    turns_text = "unlimited" if max_turns == 0 else str(max_turns)
 
-    return template.replace("{{ user_information }}", user_info).replace(
-        "{{ datetime }}", current_datetime
+    return (
+        template.replace("{{ user_information }}", user_info)
+        .replace("{{ datetime }}", current_datetime)
+        .replace("{{ max_turns }}", turns_text)
     )
 
 
@@ -87,12 +94,14 @@ class Agent:
         model_name: str = "haiku",
         driver_callbacks: "DriverCallbacks | None" = None,
         media_manager: "MediaManager | None" = None,
+        max_turns: int = 5,
     ):
         self.model_name = model_name
         self.model_id = AVAILABLE_MODELS[model_name]
         self.model = llm.get_async_model(self.model_id)
         self.driver_callbacks = driver_callbacks
         self.media_manager = media_manager
+        self.max_turns = max_turns
         self.tools = list(ALL_TOOLS)
         self.conversation = self.model.conversation(
             tools=self.tools,
@@ -109,6 +118,7 @@ class Agent:
         self.router.register("model", self._cmd_model)
         self.router.register("tools", self._cmd_tools)
         self.router.register("name", self._cmd_name)
+        self.router.register("turns", self._cmd_turns)
 
     async def _before_tool_call(self, tool, tool_call):
         """Hook called before a tool is executed."""
@@ -210,6 +220,27 @@ class Agent:
         except ValueError as e:
             return AgentResponse(text=f"Error: {e}", error=str(e))
 
+    def _cmd_turns(self, args: list[str]) -> AgentResponse:
+        """Get or set maximum autonomous turns (usage: /turns [number], 0 = infinite)"""
+        if not args:
+            if self.max_turns == 0:
+                return AgentResponse(text="Current max turns: infinite (0)")
+            return AgentResponse(text=f"Current max turns: {self.max_turns}")
+
+        try:
+            new_turns = int(args[0])
+            if new_turns < 0:
+                return AgentResponse(
+                    text="Error: turns must be 0 (infinite) or a positive number"
+                )
+
+            self.max_turns = new_turns
+            if new_turns == 0:
+                return AgentResponse(text="Max turns set to: infinite (0)")
+            return AgentResponse(text=f"Max turns set to: {new_turns}")
+        except ValueError:
+            return AgentResponse(text="Error: turns must be a number (0 for infinite)")
+
     async def handle_message(
         self,
         message: str,
@@ -246,14 +277,57 @@ class Agent:
                 )
             return response
 
-        # Regular message - get response from Claude
+        # Regular message - run agentic loop
         try:
             system_prompt = render_system_prompt(
-                self.system_prompt_template, name, username, language
+                self.system_prompt_template, name, username, language, self.max_turns
             )
 
-            chain_response = self.conversation.chain(message, system=system_prompt)
-            response_text = await chain_response.text()
+            # Use chain() with chain_limit to run the agentic loop
+            # The llm library will automatically loop through tool calls
+            # chain_limit=None means infinite, so convert 0 -> None
+            chain_limit = None if self.max_turns == 0 else self.max_turns
+            chain_response = self.conversation.chain(
+                message, system=system_prompt, chain_limit=chain_limit
+            )
+
+            # Collect all responses from the chain
+            # We must fully consume each response to ensure it gets added to conversation.responses
+            response_text = None
+            respond_tool_called = False
+
+            async for response in chain_response.responses():
+                # Consume the response to add it to conversation history
+                # This is critical for the agent to remember its actions
+                await response.text()
+
+                # Check if any tool was called in this response
+                tool_calls = await response.tool_calls()
+
+                for tool_call in tool_calls:
+                    if tool_call.name == "respond":
+                        # The respond tool was called - extract the user message
+                        respond_tool_called = True
+                        # Get the message parameter from the tool call
+                        if "message" in tool_call.arguments:
+                            response_text = tool_call.arguments["message"]
+                        break
+
+                if respond_tool_called:
+                    break
+
+            # If respond was not called, use the text from the last response
+            if not respond_tool_called:
+                # All responses have been consumed, so we need to get text from conversation
+                if self.conversation.responses:
+                    last_response = self.conversation.responses[-1]
+                    response_text = await last_response.text()
+
+                if not response_text:
+                    response_text = "I ran out of autonomous turns before completing the task. Please provide more specific instructions or break down the task into smaller steps."
+
+            if not response_text:
+                response_text = "No response generated."
 
             if self.media_manager:
                 self.media_manager.log_message(role="assistant", content=response_text)

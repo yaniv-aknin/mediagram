@@ -1,6 +1,4 @@
-from datetime import datetime
 from unittest.mock import patch
-import pytest
 
 from mediagram.agent import (
     get_user_info_text,

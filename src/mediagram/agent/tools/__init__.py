@@ -121,3 +121,4 @@ async def _process_message(
 # Import tools to trigger @tool decorator registration
 from .sleep import sleep  # noqa: F401, E402
 from .filesystem import listdir, grep, rename  # noqa: F401, E402
+from .respond import respond  # noqa: F401, E402

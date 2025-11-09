@@ -1,4 +1,3 @@
-import pytest
 from mediagram.driver.telegram.html import convert_to_telegram_html
 
 

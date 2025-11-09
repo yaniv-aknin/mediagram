@@ -20,10 +20,14 @@ class TelegramDriver:
     """Thin adapter layer for Telegram - handles message routing and formatting."""
 
     def __init__(
-        self, default_model: str = "haiku", media_dir_override: str | None = None
+        self,
+        default_model: str = "haiku",
+        media_dir_override: str | None = None,
+        max_turns: int = 5,
     ):
         self.default_model = default_model
         self.media_dir_override = media_dir_override
+        self.max_turns = max_turns
         self.user_agents: dict[int, Agent] = {}
         self.user_media_managers: dict[int, MediaManager] = {}
         self.current_update: Update | None = None
@@ -104,9 +108,13 @@ class TelegramDriver:
     def _get_or_create_agent(self, user_id: int) -> Agent:
         if user_id not in self.user_agents:
             media_manager = MediaManager.create(self.media_dir_override)
+            media_manager.create_subdir()
             self.user_media_managers[user_id] = media_manager
             self.user_agents[user_id] = Agent(
-                self.default_model, driver_callbacks=self, media_manager=media_manager
+                self.default_model,
+                driver_callbacks=self,
+                media_manager=media_manager,
+                max_turns=self.max_turns,
             )
         return self.user_agents[user_id]
 
@@ -167,6 +175,10 @@ class TelegramDriver:
         app.run_polling()
 
 
-def run(model: str = "haiku", media_dir_override: str | None = None) -> None:
-    driver = TelegramDriver(default_model=model, media_dir_override=media_dir_override)
+def run(
+    model: str = "haiku", media_dir_override: str | None = None, max_turns: int = 5
+) -> None:
+    driver = TelegramDriver(
+        default_model=model, media_dir_override=media_dir_override, max_turns=max_turns
+    )
     driver.run()

@@ -51,7 +51,7 @@ class MediaManager:
         return manager
 
     def create_subdir(self) -> Path:
-        """Create a new anonymous media subdirectory with leading dot."""
+        """Create a new anonymous media subdirectory with leading dot and messages.jsonl."""
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
         counter = 0
@@ -64,6 +64,11 @@ class MediaManager:
             counter += 1
 
         self.current_subdir = subdir
+
+        # Touch .messages.jsonl to ensure it exists
+        messages_file = subdir / ".messages.jsonl"
+        messages_file.touch()
+
         return subdir
 
     def reset_subdir(self) -> Path:
@@ -109,14 +114,14 @@ class MediaManager:
         return text
 
     def get_messages_file(self) -> Path:
-        """Get the path to the messages.jsonl file in the current subdir."""
+        """Get the path to the .messages.jsonl file in the current subdir."""
         if not self.current_subdir:
             self.create_subdir()
-        return self.current_subdir / "messages.jsonl"
+        return self.current_subdir / ".messages.jsonl"
 
     def log_message(self, role: str, content: str | dict, **metadata) -> None:
         """
-        Log a message to messages.jsonl.
+        Log a message to .messages.jsonl.
 
         Args:
             role: The role (user, assistant, system, etc.)

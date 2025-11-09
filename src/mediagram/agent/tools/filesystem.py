@@ -25,12 +25,15 @@ def ensure_contained(path: Path) -> Path:
 
 
 @tool
-async def listdir(cwd: str | None = None, recursive: bool = False):
+async def listdir(
+    cwd: str | None = None, recursive: bool = False, hidden: bool = False
+):
     """List directory contents with size and type information.
 
     Args:
         cwd: Relative directory to list (None for root)
         recursive: Whether to list recursively
+        hidden: Whether to include hidden files (starting with .)
     """
     try:
         root = get_subdir_root()
@@ -51,10 +54,14 @@ async def listdir(cwd: str | None = None, recursive: bool = False):
         if recursive:
             for item in sorted(target.rglob("*")):
                 rel_path = item.relative_to(root)
+                if not hidden and rel_path.name.startswith("."):
+                    continue
                 lines.append(_format_item(item, rel_path))
         else:
             for item in sorted(target.iterdir()):
                 rel_path = item.relative_to(root)
+                if not hidden and rel_path.name.startswith("."):
+                    continue
                 lines.append(_format_item(item, rel_path))
 
         if lines:

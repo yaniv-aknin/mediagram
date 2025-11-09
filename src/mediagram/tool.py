@@ -35,7 +35,10 @@ def create_tool_command(tool_func):
             rename_arg = kwargs["rename"]
             if rename_arg and isinstance(rename_arg[0], str):
                 # Convert from flat list to list of tuples
-                kwargs["rename"] = [(rename_arg[i], rename_arg[i + 1]) for i in range(0, len(rename_arg), 2)]
+                kwargs["rename"] = [
+                    (rename_arg[i], rename_arg[i + 1])
+                    for i in range(0, len(rename_arg), 2)
+                ]
 
         async def run():
             result = await tool_func(**kwargs)
@@ -55,14 +58,24 @@ def create_tool_command(tool_func):
             new_param = inspect.Parameter(
                 param_name,
                 inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                default=param.default if param.default != inspect.Parameter.empty else ...,
-                annotation=Annotated[list[str], typer.Option("--rename", help="Old and new paths (repeat for multiple renames)")],
+                default=param.default
+                if param.default != inspect.Parameter.empty
+                else ...,
+                annotation=Annotated[
+                    list[str],
+                    typer.Option(
+                        "--rename",
+                        help="Old and new paths (repeat for multiple renames)",
+                    ),
+                ],
             )
         else:
             new_param = inspect.Parameter(
                 param_name,
                 inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                default=param.default if param.default != inspect.Parameter.empty else ...,
+                default=param.default
+                if param.default != inspect.Parameter.empty
+                else ...,
                 annotation=param.annotation,
             )
         new_params.append(new_param)
