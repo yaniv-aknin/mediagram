@@ -95,6 +95,7 @@ class Agent:
         driver_callbacks: "DriverCallbacks | None" = None,
         media_manager: "MediaManager | None" = None,
         max_turns: int = 5,
+        tool_output_limit: int = 16384,
     ):
         self.model_name = model_name
         self.model_id = AVAILABLE_MODELS[model_name]
@@ -102,6 +103,7 @@ class Agent:
         self.driver_callbacks = driver_callbacks
         self.media_manager = media_manager
         self.max_turns = max_turns
+        self.tool_output_limit = tool_output_limit
         self.tools = list(ALL_TOOLS)
         self.conversation = self.model.conversation(
             tools=self.tools,
@@ -119,16 +121,19 @@ class Agent:
         self.router.register("tools", self._cmd_tools)
         self.router.register("name", self._cmd_name)
         self.router.register("turns", self._cmd_turns)
+        self.router.register("tlimit", self._cmd_tool_output_limit)
 
     async def _before_tool_call(self, tool, tool_call):
         """Hook called before a tool is executed."""
-        from .tools import set_driver_callbacks, set_tool_subdir
+        from .tools import set_driver_callbacks, set_tool_subdir, set_tool_output_limit
 
         if self.driver_callbacks:
             set_driver_callbacks(self.driver_callbacks)
 
         if self.media_manager and self.media_manager.current_subdir:
             set_tool_subdir(self.media_manager.current_subdir)
+
+        set_tool_output_limit(self.tool_output_limit)
 
     async def _after_tool_call(self, tool, tool_call, tool_result):
         """Hook called after a tool is executed."""
@@ -240,6 +245,27 @@ class Agent:
             return AgentResponse(text=f"Max turns set to: {new_turns}")
         except ValueError:
             return AgentResponse(text="Error: turns must be a number (0 for infinite)")
+
+    def _cmd_tool_output_limit(self, args: list[str]) -> AgentResponse:
+        """Get or set tool output limit (usage: /tlimit [chars], min 128)"""
+        if not args:
+            return AgentResponse(
+                text=f"Current tool output limit: {self.tool_output_limit} characters"
+            )
+
+        try:
+            new_limit = int(args[0])
+            if new_limit < 128:
+                return AgentResponse(
+                    text="Error: tool output limit must be at least 128 characters"
+                )
+
+            self.tool_output_limit = new_limit
+            return AgentResponse(
+                text=f"Tool output limit set to: {new_limit} characters"
+            )
+        except ValueError:
+            return AgentResponse(text="Error: limit must be a number (minimum 128)")
 
     async def handle_message(
         self,

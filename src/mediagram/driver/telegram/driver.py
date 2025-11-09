@@ -24,10 +24,12 @@ class TelegramDriver:
         default_model: str = "haiku",
         media_dir_override: str | None = None,
         max_turns: int = 5,
+        tool_output_limit: int = 16384,
     ):
         self.default_model = default_model
         self.media_dir_override = media_dir_override
         self.max_turns = max_turns
+        self.tool_output_limit = tool_output_limit
         self.user_agents: dict[int, Agent] = {}
         self.user_media_managers: dict[int, MediaManager] = {}
         self.current_update: Update | None = None
@@ -115,6 +117,7 @@ class TelegramDriver:
                 driver_callbacks=self,
                 media_manager=media_manager,
                 max_turns=self.max_turns,
+                tool_output_limit=self.tool_output_limit,
             )
         return self.user_agents[user_id]
 
@@ -176,9 +179,15 @@ class TelegramDriver:
 
 
 def run(
-    model: str = "haiku", media_dir_override: str | None = None, max_turns: int = 5
+    model: str = "haiku",
+    media_dir_override: str | None = None,
+    max_turns: int = 5,
+    tool_output_limit: int = 16384,
 ) -> None:
     driver = TelegramDriver(
-        default_model=model, media_dir_override=media_dir_override, max_turns=max_turns
+        default_model=model,
+        media_dir_override=media_dir_override,
+        max_turns=max_turns,
+        tool_output_limit=tool_output_limit,
     )
     driver.run()

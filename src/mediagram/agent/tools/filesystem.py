@@ -26,28 +26,28 @@ def ensure_contained(path: Path) -> Path:
 
 @tool
 async def listdir(
-    cwd: str | None = None, recursive: bool = False, hidden: bool = False
+    path: str | None = None, recursive: bool = False, hidden: bool = False
 ):
     """List directory contents with size and type information.
 
     Args:
-        cwd: Relative directory to list (None for root)
+        path: Relative path to list (None for root)
         recursive: Whether to list recursively
         hidden: Whether to include hidden files (starting with .)
     """
     try:
         root = get_subdir_root()
-        if cwd:
-            target = ensure_contained(Path(cwd))
+        if path:
+            target = ensure_contained(Path(path))
         else:
             target = root
 
         if not target.exists():
-            yield ErrorMessage(f"Directory does not exist: {cwd or '.'}")
+            yield ErrorMessage(f"Directory does not exist: {path or '.'}")
             return
 
         if not target.is_dir():
-            yield ErrorMessage(f"Not a directory: {cwd or '.'}")
+            yield ErrorMessage(f"Not a directory: {path or '.'}")
             return
 
         lines = []
@@ -92,31 +92,46 @@ def _format_item(path: Path, rel_path: Path) -> str:
 
 
 @tool
-async def grep(pattern: str, is_regex: bool = False, pre: int = 0, post: int = 0):
+async def grep(
+    pattern: str,
+    regex: bool = False,
+    pre: int = 0,
+    post: int = 0,
+    glob: str | None = None,
+):
     """Search for pattern in all files with optional context lines.
 
     Args:
         pattern: Pattern to search for
-        is_regex: Whether pattern is a regex (default: literal string)
+        regex: Whether pattern is a regex (default: literal string)
         pre: Number of context lines before match
         post: Number of context lines after match
+        glob: Optional glob pattern to filter files (e.g., '*.py')
     """
     try:
         root = get_subdir_root()
 
-        if is_regex:
+        if regex:
             try:
-                regex = re.compile(pattern)
+                regex_pattern = re.compile(pattern)
             except re.error as e:
                 yield ErrorMessage(f"Invalid regex: {e}")
                 return
         else:
-            regex = re.compile(re.escape(pattern))
+            regex_pattern = re.compile(re.escape(pattern))
 
         matches = []
         for file_path in root.rglob("*"):
             if not file_path.is_file():
                 continue
+
+            # Apply glob filter if provided
+            if glob:
+                from fnmatch import fnmatch
+
+                rel_path_for_glob = file_path.relative_to(root)
+                if not fnmatch(str(rel_path_for_glob), glob):
+                    continue
 
             try:
                 with file_path.open("r", encoding="utf-8", errors="ignore") as f:
@@ -125,7 +140,7 @@ async def grep(pattern: str, is_regex: bool = False, pre: int = 0, post: int = 0
                 continue
 
             rel_path = file_path.relative_to(root)
-            file_matches = _find_matches(lines, regex, rel_path, pre, post)
+            file_matches = _find_matches(lines, regex_pattern, rel_path, pre, post)
             if file_matches:
                 matches.append(file_matches)
 

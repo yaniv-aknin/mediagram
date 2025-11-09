@@ -18,6 +18,7 @@ class CommonOptions:
     model: str = "haiku"
     media_dir: str | None = None
     max_turns: int = 5
+    tool_output_limit: int = 16384  # 16K characters
 
 
 # Shared option type annotations for consistency
@@ -27,6 +28,12 @@ MediaDirOption = Annotated[
 ]
 TurnsOption = Annotated[
     int, typer.Option("--turns", help="Maximum autonomous turns per instruction")
+]
+ToolOutputLimitOption = Annotated[
+    int,
+    typer.Option(
+        "--tool-limit", help="Maximum tool output size in characters (min 128)"
+    ),
 ]
 
 

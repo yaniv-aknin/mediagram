@@ -51,7 +51,7 @@ async def test_grep_literal(test_subdir):
 @pytest.mark.asyncio
 async def test_grep_regex(test_subdir):
     """Test grep with regex pattern."""
-    result = await grep(r"hello.*world", is_regex=True)
+    result = await grep(r"hello.*world", regex=True)
     assert "file1.txt" in result
 
 

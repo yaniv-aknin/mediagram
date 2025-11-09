@@ -19,6 +19,10 @@ _tool_subdir: contextvars.ContextVar["Path | None"] = contextvars.ContextVar(
     "tool_subdir", default=None
 )
 
+_tool_output_limit: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "tool_output_limit", default=16384
+)
+
 
 def set_driver_callbacks(callbacks: "DriverCallbacks") -> None:
     """Set the driver callbacks for tool execution."""
@@ -38,6 +42,16 @@ def set_tool_subdir(subdir: "Path") -> None:
 def get_tool_subdir() -> "Path | None":
     """Get the current tool subdir."""
     return _tool_subdir.get()
+
+
+def set_tool_output_limit(limit: int) -> None:
+    """Set the tool output limit for truncation."""
+    _tool_output_limit.set(limit)
+
+
+def get_tool_output_limit() -> int:
+    """Get the current tool output limit."""
+    return _tool_output_limit.get()
 
 
 def tool(f):
@@ -67,6 +81,22 @@ def tool(f):
                     if callbacks:
                         await callbacks.on_tool_error(error, tool_id)
                     return error.text
+
+                # Apply truncation to SuccessMessage before processing
+                if isinstance(message, SuccessMessage):
+                    output_limit = get_tool_output_limit()
+                    if len(message.text) > output_limit:
+                        half_limit = output_limit // 2
+                        first_part = message.text[:half_limit]
+                        last_part = message.text[-half_limit:]
+                        truncated_text = (
+                            f"Tool emitted >{output_limit:,} characters of output.\n\n"
+                            f"Here are the first {half_limit:,} characters:\n{first_part}\n\n"
+                            f"And the last {half_limit:,} characters:\n{last_part}\n\n"
+                            f"Consider invoking the tool with more specific parameters to produce less output."
+                        )
+                        message = SuccessMessage(text=truncated_text)
+
                 await _process_message(message, callbacks, tool_id)
                 if isinstance(message, (SuccessMessage, ErrorMessage)):
                     final_message = message

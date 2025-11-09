@@ -55,6 +55,7 @@ class CLIDriver:
         input_source: InputSource | None = None,
         media_dir_override: str | None = None,
         max_turns: int = 5,
+        tool_output_limit: int = 16384,
     ):
         self.media_manager = MediaManager.create(media_dir_override)
         self.media_manager.create_subdir()
@@ -63,6 +64,7 @@ class CLIDriver:
             driver_callbacks=self,
             media_manager=self.media_manager,
             max_turns=max_turns,
+            tool_output_limit=tool_output_limit,
         )
         self.input_source = input_source or InteractiveInputSource()
         self.username = os.getenv("USER", "user")
@@ -82,14 +84,23 @@ class CLIDriver:
         )
         print(f"🔄 {progress.text}{percentage}{eta}")
 
+    def _format_message(self, text: str, is_success: bool) -> str:
+        emoji = "✅" if is_success else "❌"
+        if "\n" in text:
+            indented = "\n".join(f"   {line}" for line in text.split("\n"))
+            return f"{emoji}\n{indented}"
+        else:
+            return f"{emoji} {text}"
+
     async def on_tool_success(self, success: SuccessMessage, tool_id: str) -> None:
         """Handle tool success."""
-        print(f"✅ {success.text}")
+        print(self._format_message(success.text, is_success=True))
 
     async def on_tool_error(self, error: ErrorMessage, tool_id: str) -> None:
         """Handle tool errors."""
         details = f" - {error.error}" if error.error else ""
-        print(f"❌ {error.text}{details}")
+        full_text = f"{error.text}{details}"
+        print(self._format_message(full_text, is_success=False))
 
     def _print_welcome(self) -> None:
         print(f"Mediagram CLI - Using model: {self.agent.model_name}")
@@ -146,11 +157,13 @@ def run(
     input_source: InputSource | None = None,
     media_dir_override: str | None = None,
     max_turns: int = 5,
+    tool_output_limit: int = 16384,
 ) -> None:
     driver = CLIDriver(
         default_model=model,
         input_source=input_source,
         media_dir_override=media_dir_override,
         max_turns=max_turns,
+        tool_output_limit=tool_output_limit,
     )
     driver.run()

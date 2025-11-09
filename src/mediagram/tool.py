@@ -1,6 +1,5 @@
 import asyncio
 import inspect
-import os
 from pathlib import Path
 
 import typer
@@ -28,7 +27,11 @@ def create_tool_command(tool_func):
     """Create a command wrapper for a tool."""
 
     def wrapper(**kwargs):
-        os.environ["MEDIAGRAM_TOOL_SUBDIR"] = str(Path(_global_cwd).resolve())
+        from mediagram.agent.tools import set_tool_subdir
+
+        # Set the tool subdir context variable for filesystem operations
+        resolved_cwd = Path(_global_cwd).resolve()
+        set_tool_subdir(resolved_cwd)
 
         # Special handling for rename tool
         if tool_func.__name__ == "rename" and "rename" in kwargs:
@@ -67,6 +70,24 @@ def create_tool_command(tool_func):
                         "--rename",
                         help="Old and new paths (repeat for multiple renames)",
                     ),
+                ],
+            )
+        # Special handling for boolean flags to show as --flag/--no-flag
+        elif param.annotation is bool or (
+            hasattr(param.annotation, "__origin__")
+            and param.annotation.__origin__ is type(None) | type
+            and bool in getattr(param.annotation, "__args__", ())
+        ):
+            # For boolean parameters, create proper flag annotations
+            default_val = (
+                param.default if param.default != inspect.Parameter.empty else False
+            )
+            new_param = inspect.Parameter(
+                param_name,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                default=default_val,
+                annotation=Annotated[
+                    bool, typer.Option(f"--{param_name.replace('_', '-')}")
                 ],
             )
         else:
