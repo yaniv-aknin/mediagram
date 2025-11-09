@@ -6,6 +6,7 @@ from prompt_toolkit.history import InMemoryHistory
 
 from mediagram.agent import Agent
 from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
+from mediagram.media import MediaManager
 
 
 class InputSource(Protocol):
@@ -49,9 +50,15 @@ class CLIDriver:
     """Thin adapter layer for CLI - handles terminal I/O."""
 
     def __init__(
-        self, default_model: str = "haiku", input_source: InputSource | None = None
+        self,
+        default_model: str = "haiku",
+        input_source: InputSource | None = None,
+        media_dir_override: str | None = None,
     ):
-        self.agent = Agent(default_model, driver_callbacks=self)
+        self.media_manager = MediaManager.create(media_dir_override)
+        self.agent = Agent(
+            default_model, driver_callbacks=self, media_manager=self.media_manager
+        )
         self.input_source = input_source or InteractiveInputSource()
         self.username = os.getenv("USER", "user")
         self.name = self.username
@@ -89,43 +96,54 @@ class CLIDriver:
     async def run_async(self) -> None:
         self._print_welcome()
 
-        while True:
-            try:
-                user_input = await self.input_source.get_input("You: ")
+        try:
+            while True:
+                try:
+                    user_input = await self.input_source.get_input("You: ")
 
-                if user_input is None:
-                    print("Goodbye!")
+                    if user_input is None:
+                        print("Goodbye!")
+                        break
+
+                    if not user_input.strip():
+                        continue
+
+                    # Handle CLI-specific exit commands
+                    if user_input.strip() in ["/quit", "/exit"]:
+                        print("Goodbye!")
+                        break
+
+                    # Let agent handle the message (commands or regular messages)
+                    response = await self.agent.handle_message(
+                        user_input, name=self.name, username=self.username
+                    )
+
+                    # Handle errors
+                    if response.error:
+                        print(f"Error: {response.error}")
+                        continue
+
+                    # Display response
+                    print(f"Bot: {response.text}\n")
+
+                except Exception as e:
+                    print(f"Unexpected error: {e}")
                     break
-
-                if not user_input.strip():
-                    continue
-
-                # Handle CLI-specific exit commands
-                if user_input.strip() in ["/quit", "/exit"]:
-                    print("Goodbye!")
-                    break
-
-                # Let agent handle the message (commands or regular messages)
-                response = await self.agent.handle_message(
-                    user_input, name=self.name, username=self.username
-                )
-
-                # Handle errors
-                if response.error:
-                    print(f"Error: {response.error}")
-                    continue
-
-                # Display response
-                print(f"Bot: {response.text}\n")
-
-            except Exception as e:
-                print(f"Unexpected error: {e}")
-                break
+        finally:
+            self.media_manager.cleanup()
 
     def run(self) -> None:
         asyncio.run(self.run_async())
 
 
-def run(model: str = "haiku", input_source: InputSource | None = None) -> None:
-    driver = CLIDriver(default_model=model, input_source=input_source)
+def run(
+    model: str = "haiku",
+    input_source: InputSource | None = None,
+    media_dir_override: str | None = None,
+) -> None:
+    driver = CLIDriver(
+        default_model=model,
+        input_source=input_source,
+        media_dir_override=media_dir_override,
+    )
     driver.run()

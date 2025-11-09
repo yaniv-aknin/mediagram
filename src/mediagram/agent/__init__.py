@@ -8,6 +8,7 @@ from .tools import ALL_TOOLS
 
 if TYPE_CHECKING:
     from .callbacks import DriverCallbacks
+    from mediagram.media import MediaManager
 
 
 AVAILABLE_MODELS = {
@@ -85,11 +86,13 @@ class Agent:
         self,
         model_name: str = "haiku",
         driver_callbacks: "DriverCallbacks | None" = None,
+        media_manager: "MediaManager | None" = None,
     ):
         self.model_name = model_name
         self.model_id = AVAILABLE_MODELS[model_name]
         self.model = llm.get_async_model(self.model_id)
         self.driver_callbacks = driver_callbacks
+        self.media_manager = media_manager
         self.tools = list(ALL_TOOLS)
         self.conversation = self.model.conversation(
             tools=self.tools,
@@ -105,6 +108,7 @@ class Agent:
         self.router.register("clear", self._cmd_clear)
         self.router.register("model", self._cmd_model)
         self.router.register("tools", self._cmd_tools)
+        self.router.register("name", self._cmd_name)
 
     async def _before_tool_call(self, tool, tool_call):
         """Hook called before a tool is executed."""
@@ -124,6 +128,8 @@ class Agent:
             before_call=self._before_tool_call,
             after_call=self._after_tool_call,
         )
+        if self.media_manager:
+            self.media_manager.reset_subdir()
         return AgentResponse(text="Chat history cleared. Starting a new conversation.")
 
     def _cmd_model(self, args: list[str]) -> AgentResponse:
@@ -173,6 +179,28 @@ class Agent:
 
         return AgentResponse(text="\n".join(lines))
 
+    def _cmd_name(self, args: list[str]) -> AgentResponse:
+        """Name the current conversation (usage: /name [name])"""
+        if not self.media_manager:
+            return AgentResponse(
+                text="Media manager not available. Cannot name conversation."
+            )
+
+        name = " ".join(args) if args else None
+
+        try:
+            new_subdir = self.media_manager.rename_subdir(name)
+            if name:
+                return AgentResponse(
+                    text=f"Conversation named: {new_subdir.name}"
+                )
+            else:
+                return AgentResponse(
+                    text=f"Conversation made permanent: {new_subdir.name}"
+                )
+        except ValueError as e:
+            return AgentResponse(text=f"Error: {e}", error=str(e))
+
     async def handle_message(
         self,
         message: str,
@@ -186,20 +214,46 @@ class Agent:
         """
         message = message.strip()
 
+        # Log user message
+        if self.media_manager:
+            self.media_manager.log_message(
+                role="user", content=message, name=name, username=username
+            )
+
         # Route commands
         if message.startswith("/"):
             parts = message[1:].split(maxsplit=1)
             command = parts[0]
             args = parts[1].split() if len(parts) > 1 else []
-            return self.router.route(command, args, self)
+            response = self.router.route(command, args, self)
+
+            # Log command response
+            if self.media_manager:
+                self.media_manager.log_message(
+                    role="command",
+                    content=response.text,
+                    command=command,
+                    error=response.error,
+                )
+            return response
 
         # Regular message - get response from Claude
         try:
             system_prompt = render_system_prompt(
                 self.system_prompt_template, name, username, language
             )
+
             chain_response = self.conversation.chain(message, system=system_prompt)
             response_text = await chain_response.text()
+
+            if self.media_manager:
+                self.media_manager.log_message(role="assistant", content=response_text)
+
             return AgentResponse(text=response_text)
         except Exception as e:
-            return AgentResponse(text="", error=str(e))
+            error_response = AgentResponse(text="", error=str(e))
+            if self.media_manager:
+                self.media_manager.log_message(
+                    role="error", content=str(e), error=str(e)
+                )
+            return error_response

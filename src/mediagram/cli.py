@@ -14,6 +14,9 @@ def main(
     model: Annotated[
         ModelChoice, typer.Option("--model", help="Model to use")
     ] = ModelChoice.haiku,
+    media_dir: Annotated[
+        str | None, typer.Option("--media-dir", help="Directory for media storage")
+    ] = None,
     messages: Annotated[
         list[str] | None, typer.Argument(help="Optional messages to send")
     ] = None,
@@ -23,9 +26,9 @@ def main(
 
     if messages:
         input_source = PreDefinedInputSource(messages)
-        cli.run(model.value, input_source=input_source)
+        cli.run(model.value, media_dir_override=media_dir, input_source=input_source)
     else:
-        cli.run(model.value)
+        cli.run(model.value, media_dir_override=media_dir)
 
 
 if __name__ == "__main__":

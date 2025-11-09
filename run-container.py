@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +16,12 @@ def main():
     if mediagram_d.exists():
         cmd.extend(["-v", f"{mediagram_d}:/root/.mediagram.d:rw"])
         print(f"Mounting directory: {mediagram_d}")
+
+    media_dir = Path.home() / ".mediagram.d" / "media"
+    if media_dir.exists():
+        resolved_media = media_dir.resolve()
+        cmd.extend(["-v", f"{resolved_media}:/media:rw"])
+        print(f"Mounting media directory: {resolved_media}")
 
     cmd.append("mediagram")
 

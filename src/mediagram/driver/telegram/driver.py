@@ -12,15 +12,20 @@ from telegram.ext import (
 
 from mediagram.agent import Agent
 from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
+from mediagram.media import MediaManager
 from .html import convert_to_telegram_html
 
 
 class TelegramDriver:
     """Thin adapter layer for Telegram - handles message routing and formatting."""
 
-    def __init__(self, default_model: str = "haiku"):
+    def __init__(
+        self, default_model: str = "haiku", media_dir_override: str | None = None
+    ):
         self.default_model = default_model
+        self.media_dir_override = media_dir_override
         self.user_agents: dict[int, Agent] = {}
+        self.user_media_managers: dict[int, MediaManager] = {}
         self.current_update: Update | None = None
         self.current_context: ContextTypes.DEFAULT_TYPE | None = None
         self.progress_messages: dict[str, int] = {}
@@ -98,7 +103,11 @@ class TelegramDriver:
 
     def _get_or_create_agent(self, user_id: int) -> Agent:
         if user_id not in self.user_agents:
-            self.user_agents[user_id] = Agent(self.default_model, driver_callbacks=self)
+            media_manager = MediaManager.create(self.media_dir_override)
+            self.user_media_managers[user_id] = media_manager
+            self.user_agents[user_id] = Agent(
+                self.default_model, driver_callbacks=self, media_manager=media_manager
+            )
         return self.user_agents[user_id]
 
     async def message_handler(
@@ -158,6 +167,6 @@ class TelegramDriver:
         app.run_polling()
 
 
-def run(model: str = "haiku") -> None:
-    driver = TelegramDriver(default_model=model)
+def run(model: str = "haiku", media_dir_override: str | None = None) -> None:
+    driver = TelegramDriver(default_model=model, media_dir_override=media_dir_override)
     driver.run()
