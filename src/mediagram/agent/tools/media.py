@@ -63,7 +63,9 @@ async def run_jsonl_subprocess(cmd: list[str], tool_name: str, cwd: Path | None 
 
                 elif msg_type == "error":
                     error_details = data.get("error_details", "")
-                    full_message = f"{message}\n{error_details}" if error_details else message
+                    full_message = (
+                        f"{message}\n{error_details}" if error_details else message
+                    )
                     yield ErrorMessage(text=full_message)
                     return
 
@@ -79,11 +81,19 @@ async def run_jsonl_subprocess(cmd: list[str], tool_name: str, cwd: Path | None 
             return
 
         if returncode == 0:
-            summary = "\n".join(output_lines[-5:]) if output_lines else f"{tool_name} completed successfully"
+            summary = (
+                "\n".join(output_lines[-5:])
+                if output_lines
+                else f"{tool_name} completed successfully"
+            )
             yield SuccessMessage(text=summary)
         else:
-            error_output = "\n".join(output_lines[-10:]) if output_lines else f"{tool_name} failed"
-            yield ErrorMessage(text=f"{tool_name} failed with exit code {returncode}\n{error_output}")
+            error_output = (
+                "\n".join(output_lines[-10:]) if output_lines else f"{tool_name} failed"
+            )
+            yield ErrorMessage(
+                text=f"{tool_name} failed with exit code {returncode}\n{error_output}"
+            )
 
     except FileNotFoundError:
         yield ErrorMessage(text=f"Error: {cmd[0]} not found - is it installed?")

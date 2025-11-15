@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import llm as llm_lib
 
 from mediagram.config import AVAILABLE_MODELS, patch_docstring

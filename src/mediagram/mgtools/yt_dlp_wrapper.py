@@ -5,6 +5,7 @@ yt-dlp wrapper that outputs JSONL progress for tool integration.
 Usage:
     mgtools.yt-dlp URL [options]
 """
+
 import json
 import sys
 from pathlib import Path
@@ -138,7 +139,9 @@ def main():
     if "subtitles" in extract_set and args.subtitle_langs:
         ydl_opts["writesubtitles"] = True
         ydl_opts["subtitleslangs"] = args.subtitle_langs
-        emit_progress("info", f"Downloading subtitles: {', '.join(args.subtitle_langs)}")
+        emit_progress(
+            "info", f"Downloading subtitles: {', '.join(args.subtitle_langs)}"
+        )
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

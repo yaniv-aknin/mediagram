@@ -5,8 +5,11 @@ from pathlib import Path
 import typer
 from typing_extensions import Annotated
 
+from mediagram.config import load_environment
 from mediagram.agent.tools import ALL_TOOLS, set_driver_callbacks
 from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
+
+load_environment()
 
 app = typer.Typer()
 

@@ -5,6 +5,7 @@ ffmpeg wrapper that outputs JSONL progress for tool integration.
 Usage:
     mgtools.ffmpeg [ffmpeg args...]
 """
+
 import json
 import re
 import subprocess
