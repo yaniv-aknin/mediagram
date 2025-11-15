@@ -7,6 +7,7 @@ from prompt_toolkit.history import InMemoryHistory
 from mediagram.agent import Agent
 from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
 from mediagram.media import MediaManager
+from mediagram.config import DEFAULT_MAX_TURNS, DEFAULT_TOOL_OUTPUT_LIMIT
 
 
 class InputSource(Protocol):
@@ -54,8 +55,8 @@ class CLIDriver:
         default_model: str = "haiku",
         input_source: InputSource | None = None,
         media_dir_override: str | None = None,
-        max_turns: int = 5,
-        tool_output_limit: int = 16384,
+        max_turns: int = DEFAULT_MAX_TURNS,
+        tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT,
     ):
         self.media_manager = MediaManager.create(media_dir_override)
         self.media_manager.create_subdir()
@@ -156,8 +157,8 @@ def run(
     model: str = "haiku",
     input_source: InputSource | None = None,
     media_dir_override: str | None = None,
-    max_turns: int = 5,
-    tool_output_limit: int = 16384,
+    max_turns: int = DEFAULT_MAX_TURNS,
+    tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT,
 ) -> None:
     driver = CLIDriver(
         default_model=model,

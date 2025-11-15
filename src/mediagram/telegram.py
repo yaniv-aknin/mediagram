@@ -6,6 +6,8 @@ from mediagram.config import (
     MediaDirOption,
     TurnsOption,
     ToolOutputLimitOption,
+    DEFAULT_MAX_TURNS,
+    DEFAULT_TOOL_OUTPUT_LIMIT,
     load_environment,
 )
 from mediagram.driver import telegram
@@ -18,8 +20,8 @@ app = typer.Typer()
 def main(
     model: ModelOption = ModelChoice.haiku,
     media_dir: MediaDirOption = None,
-    turns: TurnsOption = 5,
-    tool_output_limit: ToolOutputLimitOption = 16384,
+    turns: TurnsOption = DEFAULT_MAX_TURNS,
+    tool_output_limit: ToolOutputLimitOption = DEFAULT_TOOL_OUTPUT_LIMIT,
 ) -> None:
     """Mediagram Telegram - Chat with Claude via Telegram"""
     load_environment()

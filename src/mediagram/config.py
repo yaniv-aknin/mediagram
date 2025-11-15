@@ -11,6 +11,12 @@ AVAILABLE_MODELS = {
     "sonnet": "claude-sonnet-4.5",
 }
 
+# Default configuration values
+DEFAULT_MODEL = "haiku"
+DEFAULT_MAX_TURNS = 10
+DEFAULT_TOOL_OUTPUT_LIMIT = 16384  # 16K characters
+MIN_TOOL_OUTPUT_LIMIT = 128
+
 
 def patch_docstring(func):
     """Decorator that patches {available_models} in docstrings with current model list."""
@@ -29,10 +35,10 @@ class ModelChoice(str, Enum):
 class CommonOptions:
     """Common options shared across all entry points."""
 
-    model: str = "haiku"
+    model: str = DEFAULT_MODEL
     media_dir: str | None = None
-    max_turns: int = 5
-    tool_output_limit: int = 16384  # 16K characters
+    max_turns: int = DEFAULT_MAX_TURNS
+    tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT
 
 
 # Shared option type annotations for consistency
@@ -46,7 +52,8 @@ TurnsOption = Annotated[
 ToolOutputLimitOption = Annotated[
     int,
     typer.Option(
-        "--tool-limit", help="Maximum tool output size in characters (min 128)"
+        "--tool-limit",
+        help=f"Maximum tool output size in characters (min {MIN_TOOL_OUTPUT_LIMIT})",
     ),
 ]
 

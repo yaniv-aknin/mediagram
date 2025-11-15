@@ -7,6 +7,8 @@ from mediagram.config import (
     MediaDirOption,
     TurnsOption,
     ToolOutputLimitOption,
+    DEFAULT_MAX_TURNS,
+    DEFAULT_TOOL_OUTPUT_LIMIT,
     load_environment,
 )
 from mediagram.driver import cli
@@ -20,8 +22,8 @@ app = typer.Typer()
 def main(
     model: ModelOption = ModelChoice.haiku,
     media_dir: MediaDirOption = None,
-    turns: TurnsOption = 5,
-    tool_output_limit: ToolOutputLimitOption = 16384,
+    turns: TurnsOption = DEFAULT_MAX_TURNS,
+    tool_output_limit: ToolOutputLimitOption = DEFAULT_TOOL_OUTPUT_LIMIT,
     messages: Annotated[
         list[str] | None, typer.Argument(help="Optional messages to send")
     ] = None,

@@ -4,6 +4,7 @@ import functools
 from typing import TYPE_CHECKING
 
 from ..callbacks import ProgressMessage, SuccessMessage, ErrorMessage
+from mediagram.config import DEFAULT_TOOL_OUTPUT_LIMIT
 
 if TYPE_CHECKING:
     from ..callbacks import DriverCallbacks
@@ -20,7 +21,7 @@ _tool_subdir: contextvars.ContextVar["Path | None"] = contextvars.ContextVar(
 )
 
 _tool_output_limit: contextvars.ContextVar[int] = contextvars.ContextVar(
-    "tool_output_limit", default=16384
+    "tool_output_limit", default=DEFAULT_TOOL_OUTPUT_LIMIT
 )
 
 

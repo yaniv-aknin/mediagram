@@ -5,7 +5,12 @@ from typing import Callable, TYPE_CHECKING
 import llm
 
 from .tools import ALL_TOOLS
-from mediagram.config import AVAILABLE_MODELS
+from mediagram.config import (
+    AVAILABLE_MODELS,
+    MIN_TOOL_OUTPUT_LIMIT,
+    DEFAULT_MAX_TURNS,
+    DEFAULT_TOOL_OUTPUT_LIMIT,
+)
 
 if TYPE_CHECKING:
     from .callbacks import DriverCallbacks
@@ -31,7 +36,7 @@ def render_system_prompt(
     name: str,
     username: str | None = None,
     language: str | None = None,
-    max_turns: int = 5,
+    max_turns: int = DEFAULT_MAX_TURNS,
 ) -> str:
     user_info = get_user_info_text(name, username, language)
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z").strip()
@@ -89,8 +94,8 @@ class Agent:
         model_name: str = "haiku",
         driver_callbacks: "DriverCallbacks | None" = None,
         media_manager: "MediaManager | None" = None,
-        max_turns: int = 5,
-        tool_output_limit: int = 16384,
+        max_turns: int = DEFAULT_MAX_TURNS,
+        tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT,
     ):
         self.model_name = model_name
         self.model_id = AVAILABLE_MODELS[model_name]
@@ -250,9 +255,9 @@ class Agent:
 
         try:
             new_limit = int(args[0])
-            if new_limit < 128:
+            if new_limit < MIN_TOOL_OUTPUT_LIMIT:
                 return AgentResponse(
-                    text="Error: tool output limit must be at least 128 characters"
+                    text=f"Error: tool output limit must be at least {MIN_TOOL_OUTPUT_LIMIT} characters"
                 )
 
             self.tool_output_limit = new_limit
@@ -260,7 +265,9 @@ class Agent:
                 text=f"Tool output limit set to: {new_limit} characters"
             )
         except ValueError:
-            return AgentResponse(text="Error: limit must be a number (minimum 128)")
+            return AgentResponse(
+                text=f"Error: limit must be a number (minimum {MIN_TOOL_OUTPUT_LIMIT})"
+            )
 
     async def handle_message(
         self,

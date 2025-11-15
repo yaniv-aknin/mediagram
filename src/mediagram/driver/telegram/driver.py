@@ -13,6 +13,7 @@ from telegram.ext import (
 from mediagram.agent import Agent
 from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
 from mediagram.media import MediaManager
+from mediagram.config import DEFAULT_MAX_TURNS, DEFAULT_TOOL_OUTPUT_LIMIT
 from .html import convert_to_telegram_html
 
 
@@ -23,8 +24,8 @@ class TelegramDriver:
         self,
         default_model: str = "haiku",
         media_dir_override: str | None = None,
-        max_turns: int = 5,
-        tool_output_limit: int = 16384,
+        max_turns: int = DEFAULT_MAX_TURNS,
+        tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT,
     ):
         self.default_model = default_model
         self.media_dir_override = media_dir_override
@@ -181,8 +182,8 @@ class TelegramDriver:
 def run(
     model: str = "haiku",
     media_dir_override: str | None = None,
-    max_turns: int = 5,
-    tool_output_limit: int = 16384,
+    max_turns: int = DEFAULT_MAX_TURNS,
+    tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT,
 ) -> None:
     driver = TelegramDriver(
         default_model=model,
