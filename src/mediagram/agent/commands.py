@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Callable, TYPE_CHECKING
 import inspect
+import shlex
+from pathlib import Path
 
 from mediagram.config import AVAILABLE_MODELS, MIN_TOOL_OUTPUT_LIMIT
 
@@ -12,6 +14,7 @@ if TYPE_CHECKING:
 class AgentResponse:
     text: str
     error: str | None = None
+    log_summary: str | None = None
 
 
 class CommandRouter:
@@ -42,7 +45,7 @@ class CommandRouter:
 
         parts = message[1:].split(maxsplit=1)
         command = parts[0]
-        args = parts[1].split() if len(parts) > 1 else []
+        args_string = parts[1] if len(parts) > 1 else ""
 
         if command == "help":
             response = AgentResponse(text=self.get_help())
@@ -52,11 +55,12 @@ class CommandRouter:
             )
         else:
             handler = self.commands[command]
-            response = handler(agent, args)
+            response = handler(agent, args_string)
 
+        log_content = response.log_summary if response.log_summary else response.text
         self.log_message(
             role="command",
-            content=response.text,
+            content=log_content,
             command=command,
             error=response.error,
         )
@@ -72,7 +76,7 @@ def command(name: str):
 
 
 @command("clear")
-def cmd_clear(agent: "Agent", args: list[str]) -> AgentResponse:
+def cmd_clear(agent: "Agent", args_string: str) -> AgentResponse:
     """Clear conversation history and start fresh"""
     agent.conversation = agent.model.conversation(
         tools=agent.tools,
@@ -84,8 +88,9 @@ def cmd_clear(agent: "Agent", args: list[str]) -> AgentResponse:
 
 
 @command("model")
-def cmd_model(agent: "Agent", args: list[str]) -> AgentResponse:
+def cmd_model(agent: "Agent", args_string: str) -> AgentResponse:
     """Change or show current model (usage: /model [haiku|sonnet])"""
+    args = args_string.split()
     if not args:
         return AgentResponse(
             text=f"Current model: {agent.model_name}\nAvailable models: {', '.join(AVAILABLE_MODELS.keys())}"
@@ -106,7 +111,7 @@ def cmd_model(agent: "Agent", args: list[str]) -> AgentResponse:
 
 
 @command("tools")
-def cmd_tools(agent: "Agent", args: list[str]) -> AgentResponse:
+def cmd_tools(agent: "Agent", args_string: str) -> AgentResponse:
     """List all available tools"""
     if not agent.tools:
         return AgentResponse(text="No tools available.")
@@ -140,9 +145,9 @@ def _format_annotation(annotation) -> str:
 
 
 @command("name")
-def cmd_name(agent: "Agent", args: list[str]) -> AgentResponse:
+def cmd_name(agent: "Agent", args_string: str) -> AgentResponse:
     """Name the current conversation (usage: /name [name])"""
-    name = " ".join(args) if args else None
+    name = args_string.strip() if args_string else None
 
     try:
         new_subdir = agent.media_manager.rename_subdir(name)
@@ -155,8 +160,9 @@ def cmd_name(agent: "Agent", args: list[str]) -> AgentResponse:
 
 
 @command("turns")
-def cmd_turns(agent: "Agent", args: list[str]) -> AgentResponse:
+def cmd_turns(agent: "Agent", args_string: str) -> AgentResponse:
     """Get or set maximum autonomous turns (usage: /turns [number], 0 = infinite)"""
+    args = args_string.split()
     if not args:
         if agent.max_turns == 0:
             return AgentResponse(text="Current max turns: infinite (0)")
@@ -178,8 +184,9 @@ def cmd_turns(agent: "Agent", args: list[str]) -> AgentResponse:
 
 
 @command("tlimit")
-def cmd_tool_output_limit(agent: "Agent", args: list[str]) -> AgentResponse:
+def cmd_tool_output_limit(agent: "Agent", args_string: str) -> AgentResponse:
     """Get or set tool output limit (usage: /tlimit [chars], min 128)"""
+    args = args_string.split()
     if not args:
         return AgentResponse(
             text=f"Current tool output limit: {agent.tool_output_limit} characters"
@@ -201,8 +208,9 @@ def cmd_tool_output_limit(agent: "Agent", args: list[str]) -> AgentResponse:
 
 
 @command("tdetails")
-def cmd_tool_details(agent: "Agent", args: list[str]) -> AgentResponse:
+def cmd_tool_details(agent: "Agent", args_string: str) -> AgentResponse:
     """Get or set tool details display (usage: /tdetails [on|off])"""
+    args = args_string.split()
     if not args:
         status = "on" if agent.tool_details else "off"
         return AgentResponse(text=f"Tool details: {status}")
@@ -216,3 +224,201 @@ def cmd_tool_details(agent: "Agent", args: list[str]) -> AgentResponse:
         return AgentResponse(text="Tool details disabled")
     else:
         return AgentResponse(text="Error: argument must be 'on' or 'off'")
+
+
+def _ensure_contained(agent: "Agent", path: str) -> Path:
+    """Ensure path is contained within the media subdir."""
+    subdir = agent.media_manager.current_subdir
+    if not subdir:
+        raise ValueError("No active media subdirectory")
+
+    resolved = (subdir / path).resolve()
+    if not str(resolved).startswith(str(subdir)):
+        raise ValueError(f"Path {path} escapes subdir containment")
+
+    return resolved
+
+
+@command("read")
+def cmd_read(agent: "Agent", args_string: str) -> AgentResponse:
+    """Read a file from the media subdir (usage: /read <filename> [max_kb])"""
+    try:
+        args = shlex.split(args_string)
+    except ValueError as e:
+        return AgentResponse(text=f"Error parsing arguments: {e}", error=str(e))
+
+    if not args:
+        return AgentResponse(
+            text="Error: filename required\nUsage: /read <filename> [max_kb]",
+            error="Missing filename",
+        )
+
+    filename = args[0]
+    max_kb = 8
+
+    if len(args) > 1:
+        try:
+            max_kb = int(args[1])
+        except ValueError:
+            return AgentResponse(
+                text=f"Error: max_kb must be a number, got '{args[1]}'",
+                error="Invalid max_kb",
+            )
+
+    try:
+        file_path = _ensure_contained(agent, filename)
+    except ValueError as e:
+        return AgentResponse(text=f"Error: {e}", error=str(e))
+
+    if not file_path.exists():
+        return AgentResponse(
+            text=f"Error: file does not exist: {filename}", error="File not found"
+        )
+
+    if not file_path.is_file():
+        return AgentResponse(text=f"Error: not a file: {filename}", error="Not a file")
+
+    file_size_bytes = file_path.stat().st_size
+    file_size_kb = file_size_bytes / 1024
+
+    if max_kb > 0 and file_size_kb > max_kb:
+        return AgentResponse(
+            text=f"Error: {filename} is {file_size_kb:.1f}KB, larger than {max_kb}KB limit",
+            error="File too large",
+        )
+
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return AgentResponse(
+            text=f"Error: {filename} is not a text file", error="Not a text file"
+        )
+    except Exception as e:
+        return AgentResponse(text=f"Error reading file: {e}", error=str(e))
+
+    log_summary = f"Read {filename} ({file_size_kb:.1f}KB)"
+    return AgentResponse(text=content, log_summary=log_summary)
+
+
+@command("send")
+def cmd_send(agent: "Agent", args_string: str) -> AgentResponse:
+    """Send a file to the user's driver (usage: /send <filename> [max_kb])"""
+    try:
+        args = shlex.split(args_string)
+    except ValueError as e:
+        return AgentResponse(text=f"Error parsing arguments: {e}", error=str(e))
+
+    if not args:
+        return AgentResponse(
+            text="Error: filename required\nUsage: /send <filename> [max_kb]",
+            error="Missing filename",
+        )
+
+    filename = args[0]
+    max_kb = 1024
+
+    if len(args) > 1:
+        try:
+            max_kb = int(args[1])
+        except ValueError:
+            return AgentResponse(
+                text=f"Error: max_kb must be a number, got '{args[1]}'",
+                error="Invalid max_kb",
+            )
+
+    try:
+        file_path = _ensure_contained(agent, filename)
+    except ValueError as e:
+        return AgentResponse(text=f"Error: {e}", error=str(e))
+
+    if not file_path.exists():
+        return AgentResponse(
+            text=f"Error: file does not exist: {filename}", error="File not found"
+        )
+
+    if not file_path.is_file():
+        return AgentResponse(text=f"Error: not a file: {filename}", error="Not a file")
+
+    file_size_bytes = file_path.stat().st_size
+    file_size_kb = file_size_bytes / 1024
+
+    if max_kb > 0 and file_size_kb > max_kb:
+        return AgentResponse(
+            text=f"Error: {filename} is {file_size_kb:.1f}KB, larger than {max_kb}KB limit",
+            error="File too large",
+        )
+
+    if not hasattr(agent.driver_callbacks, "send_file"):
+        return AgentResponse(
+            text="Error: file sending not supported by current driver",
+            error="Driver doesn't support send_file",
+        )
+
+    try:
+        result_message = agent.driver_callbacks.send_file(file_path)
+        log_summary = f"Sent {filename} ({file_size_kb:.1f}KB)"
+        return AgentResponse(text=result_message, log_summary=log_summary)
+    except Exception as e:
+        return AgentResponse(text=f"Error sending file: {e}", error=str(e))
+
+
+@command("ls")
+def cmd_ls(agent: "Agent", args_string: str) -> AgentResponse:
+    """List directory contents in the media subdir (usage: /ls [path])"""
+    args = args_string.split()
+    path_arg = args[0] if args else None
+
+    try:
+        subdir = agent.media_manager.current_subdir
+        if not subdir:
+            return AgentResponse(
+                text="Error: no active media subdirectory", error="No subdir"
+            )
+
+        if path_arg:
+            target = _ensure_contained(agent, path_arg)
+        else:
+            target = subdir
+
+        if not target.exists():
+            return AgentResponse(
+                text=f"Error: directory does not exist: {path_arg or '.'}",
+                error="Directory not found",
+            )
+
+        if not target.is_dir():
+            return AgentResponse(
+                text=f"Error: not a directory: {path_arg or '.'}",
+                error="Not a directory",
+            )
+
+        lines = []
+        for item in sorted(target.iterdir()):
+            rel_path = item.relative_to(subdir)
+            if item.name.startswith("."):
+                continue
+
+            if item.is_symlink():
+                type_str = "symlink"
+                size = 0
+            elif item.is_dir():
+                type_str = "dir"
+                size = 0
+            elif item.is_file():
+                type_str = "file"
+                size = item.stat().st_size
+            else:
+                type_str = "other"
+                size = 0
+
+            lines.append(f"{rel_path}  {size:>10}  {type_str}")
+
+        if lines:
+            return AgentResponse(text="\n".join(lines))
+        else:
+            return AgentResponse(text="(empty directory)")
+
+    except ValueError as e:
+        return AgentResponse(text=f"Error: {e}", error=str(e))
+    except Exception as e:
+        return AgentResponse(text=f"Error: {e}", error=str(e))

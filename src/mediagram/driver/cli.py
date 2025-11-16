@@ -1,5 +1,7 @@
 import asyncio
 import os
+import shutil
+from pathlib import Path
 from typing import Protocol
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import InMemoryHistory
@@ -122,6 +124,28 @@ class CLIDriver:
         details = f" - {error.error}" if error.error else ""
         full_text = f"{error.text}{details}"
         print(self._format_message(full_text, is_success=False))
+
+    def send_file(self, file_path: Path) -> str:
+        """Send file to user by copying to Downloads folder."""
+        downloads_dir = Path.home() / "Downloads"
+
+        if not downloads_dir.exists():
+            return "Warning: ~/Downloads directory does not exist. File not copied."
+
+        try:
+            dest_path = downloads_dir / file_path.name
+            counter = 1
+            while dest_path.exists():
+                stem = file_path.stem
+                suffix = file_path.suffix
+                dest_path = downloads_dir / f"{stem}_{counter}{suffix}"
+                counter += 1
+
+            shutil.copy2(file_path, dest_path)
+            file_size_kb = file_path.stat().st_size / 1024
+            return f"File saved to {dest_path} ({file_size_kb:.1f}KB)"
+        except Exception as e:
+            return f"Error copying file: {e}"
 
     def _print_welcome(self) -> None:
         print(f"Mediagram CLI - Using model: {self.agent.model_name}")

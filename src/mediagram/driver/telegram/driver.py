@@ -1,5 +1,6 @@
 import os
 import mistune
+from pathlib import Path
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
@@ -137,6 +138,37 @@ class TelegramDriver:
             )
         except TelegramError:
             pass
+
+    async def send_file_async(self, file_path: Path) -> str:
+        """Send file to user via Telegram (async version)."""
+        if not self.current_update or not self.current_context:
+            return "Error: cannot send file, no active Telegram context"
+
+        try:
+            file_size_kb = file_path.stat().st_size / 1024
+            await self.current_context.bot.send_document(
+                chat_id=self.current_update.effective_chat.id,
+                document=file_path,
+                filename=file_path.name,
+            )
+            return f"Sent {file_path.name} ({file_size_kb:.1f}KB)"
+        except Exception as e:
+            return f"Error sending file: {e}"
+
+    def send_file(self, file_path: Path) -> str:
+        """Send file to user via Telegram (sync wrapper for command handlers)."""
+        import asyncio
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(self.send_file_async(file_path))
+                file_size_kb = file_path.stat().st_size / 1024
+                return f"Sending {file_path.name} ({file_size_kb:.1f}KB)"
+            else:
+                return asyncio.run(self.send_file_async(file_path))
+        except Exception as e:
+            return f"Error sending file: {e}"
 
     def _get_or_create_agent(self, user_id: int) -> Agent:
         if user_id not in self.user_agents:

@@ -190,6 +190,55 @@ def _find_matches(
 
 
 @tool
+async def read(path: str, lines: int | None = None, chars: int | None = None):
+    """Read file contents with optional slicing.
+
+    Args:
+        path: Relative path to file
+        lines: Number of lines to read (positive=from start, negative=from end, None=all)
+        chars: Number of characters to read (positive=from start, negative=from end, None=all)
+    """
+    try:
+        file_path = ensure_contained(Path(path))
+
+        if not file_path.exists():
+            yield ErrorMessage(f"File does not exist: {path}")
+            return
+
+        if not file_path.is_file():
+            yield ErrorMessage(f"Not a file: {path}")
+            return
+
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            yield ErrorMessage(f"File is not a text file: {path}")
+            return
+        except Exception as e:
+            yield ErrorMessage(f"Error reading file: {e}")
+            return
+
+        if chars is not None:
+            if chars > 0:
+                content = content[:chars]
+            elif chars < 0:
+                content = content[chars:]
+
+        if lines is not None:
+            content_lines = content.splitlines(keepends=True)
+            if lines > 0:
+                content_lines = content_lines[:lines]
+            elif lines < 0:
+                content_lines = content_lines[lines:]
+            content = "".join(content_lines)
+
+        yield SuccessMessage(content)
+
+    except ValueError as e:
+        yield ErrorMessage(str(e))
+
+
+@tool
 async def rename(old: list[str], new: list[str]):
     """Rename files or directories.
 

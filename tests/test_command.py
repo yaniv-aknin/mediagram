@@ -34,13 +34,13 @@ def test_command_router_register_and_handle():
     """Test command registration and handling."""
     router = CommandRouter(lambda **kwargs: None)
 
-    def mock_handler(agent, args):
-        return AgentResponse(text=f"Handler called with {args}")
+    def mock_handler(agent, args_string):
+        return AgentResponse(text=f"Handler called with {args_string}")
 
     CommandRouter.register("test", mock_handler)
     result = router.handle("/test arg1 arg2", None)
 
-    assert result.text == "Handler called with ['arg1', 'arg2']"
+    assert result.text == "Handler called with arg1 arg2"
 
 
 def test_command_router_help():
