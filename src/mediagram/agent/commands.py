@@ -79,8 +79,7 @@ def cmd_clear(agent: "Agent", args: list[str]) -> AgentResponse:
         before_call=agent._before_tool_call,
         after_call=agent._after_tool_call,
     )
-    if agent.media_manager:
-        agent.media_manager.reset_subdir()
+    agent.media_manager.reset_subdir()
     return AgentResponse(text="Chat history cleared. Starting a new conversation.")
 
 
@@ -143,11 +142,6 @@ def _format_annotation(annotation) -> str:
 @command("name")
 def cmd_name(agent: "Agent", args: list[str]) -> AgentResponse:
     """Name the current conversation (usage: /name [name])"""
-    if not agent.media_manager:
-        return AgentResponse(
-            text="Media manager not available. Cannot name conversation."
-        )
-
     name = " ".join(args) if args else None
 
     try:

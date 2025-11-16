@@ -61,9 +61,9 @@ def render_system_prompt(
 class Agent:
     def __init__(
         self,
+        media_manager: "MediaManager",
         model_name: str = "haiku",
         driver_callbacks: "DriverCallbacks | None" = None,
-        media_manager: "MediaManager | None" = None,
         max_turns: int = DEFAULT_MAX_TURNS,
         tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT,
     ):
@@ -81,8 +81,7 @@ class Agent:
             after_call=self._after_tool_call,
         )
         self.system_prompt_template = load_system_prompt_template()
-        log_fn = media_manager.log_message if media_manager else lambda **kwargs: None
-        self.router = CommandRouter(log_fn)
+        self.router = CommandRouter(media_manager.log_message)
 
     def _get_async_model(self, model_id: str):
         """Get an async model instance."""
@@ -95,7 +94,7 @@ class Agent:
         if self.driver_callbacks:
             set_driver_callbacks(self.driver_callbacks)
 
-        if self.media_manager and self.media_manager.current_subdir:
+        if self.media_manager.current_subdir:
             set_tool_subdir(self.media_manager.current_subdir)
 
         set_tool_output_limit(self.tool_output_limit)
@@ -117,10 +116,9 @@ class Agent:
         """
         message = message.strip()
 
-        if self.media_manager:
-            self.media_manager.log_message(
-                role="user", content=message, name=name, username=username
-            )
+        self.media_manager.log_message(
+            role="user", content=message, name=name, username=username
+        )
 
         if message.startswith("/"):
             return self.router.handle(message, self)
@@ -179,14 +177,10 @@ class Agent:
             if not response_text:
                 response_text = "No response generated."
 
-            if self.media_manager:
-                self.media_manager.log_message(role="assistant", content=response_text)
+            self.media_manager.log_message(role="assistant", content=response_text)
 
             return AgentResponse(text=response_text)
         except Exception as e:
             error_response = AgentResponse(text="", error=str(e))
-            if self.media_manager:
-                self.media_manager.log_message(
-                    role="error", content=str(e), error=str(e)
-                )
+            self.media_manager.log_message(role="error", content=str(e), error=str(e))
             return error_response

@@ -114,9 +114,9 @@ class TelegramDriver:
             media_manager.create_subdir()
             self.user_media_managers[user_id] = media_manager
             self.user_agents[user_id] = Agent(
-                self.default_model,
-                driver_callbacks=self,
                 media_manager=media_manager,
+                model_name=self.default_model,
+                driver_callbacks=self,
                 max_turns=self.max_turns,
                 tool_output_limit=self.tool_output_limit,
             )

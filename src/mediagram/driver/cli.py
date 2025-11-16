@@ -61,9 +61,9 @@ class CLIDriver:
         self.media_manager = MediaManager.create(media_dir_override)
         self.media_manager.create_subdir()
         self.agent = Agent(
-            default_model,
-            driver_callbacks=self,
             media_manager=self.media_manager,
+            model_name=default_model,
+            driver_callbacks=self,
             max_turns=max_turns,
             tool_output_limit=tool_output_limit,
         )
