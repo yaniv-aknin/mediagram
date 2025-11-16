@@ -83,7 +83,6 @@ def tool(f):
                         await callbacks.on_tool_error(error, tool_id)
                     return error.text
 
-                # Apply truncation to SuccessMessage before processing
                 if isinstance(message, SuccessMessage):
                     output_limit = get_tool_output_limit()
                     if len(message.text) > output_limit:
@@ -152,7 +151,6 @@ async def _process_message(
 # Import tools to trigger @tool decorator registration
 from .sleep import sleep  # noqa: F401, E402
 from .filesystem import listdir, grep, rename  # noqa: F401, E402
-from .respond import respond  # noqa: F401, E402
 from .media import ffmpeg, youtube_download  # noqa: F401, E402
 from .llm import llm  # noqa: F401, E402
 from .assemblyai import transcribe  # noqa: F401, E402

@@ -37,15 +37,25 @@ def render_system_prompt(
     username: str | None = None,
     language: str | None = None,
     max_turns: int = DEFAULT_MAX_TURNS,
+    remaining_turns: int | None = None,
 ) -> str:
     user_info = get_user_info_text(name, username, language)
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S %Z").strip()
-    turns_text = "unlimited" if max_turns == 0 else str(max_turns)
+
+    if max_turns == 0:
+        max_turns_text = "unlimited"
+        remaining_turns_text = "unlimited"
+    else:
+        max_turns_text = str(max_turns)
+        remaining_turns_text = str(
+            remaining_turns if remaining_turns is not None else max_turns
+        )
 
     return (
         template.replace("{{ user_information }}", user_info)
         .replace("{{ datetime }}", current_datetime)
-        .replace("{{ max_turns }}", turns_text)
+        .replace("{{ max_turns }}", max_turns_text)
+        .replace("{{ remaining_turns }}", remaining_turns_text)
     )
 
 
@@ -307,52 +317,63 @@ class Agent:
 
         # Regular message - run agentic loop
         try:
-            system_prompt = render_system_prompt(
-                self.system_prompt_template, name, username, language, self.max_turns
-            )
-
-            # Use chain() with chain_limit to run the agentic loop
-            # The llm library will automatically loop through tool calls
-            # chain_limit=None means infinite, so convert 0 -> None
-            chain_limit = None if self.max_turns == 0 else self.max_turns
-            chain_response = self.conversation.chain(
-                message, system=system_prompt, chain_limit=chain_limit
-            )
-
-            # Collect all responses from the chain
-            # We must fully consume each response to ensure it gets added to conversation.responses
+            # Initialize loop state
+            remaining_turns = self.max_turns if self.max_turns > 0 else float("inf")
+            current_message = message
+            tool_results = None
             response_text = None
-            respond_tool_called = False
+            had_tool_calls = False
 
-            async for response in chain_response.responses():
-                # Consume the response to add it to conversation history
-                # This is critical for the agent to remember its actions
-                await response.text()
+            # Agent loop - continue while turns remain and tools are being called
+            while remaining_turns > 0:
+                # Update system prompt with current remaining_turns
+                remaining_turns_int = (
+                    int(remaining_turns) if remaining_turns != float("inf") else None
+                )
+                system_prompt = render_system_prompt(
+                    self.system_prompt_template,
+                    name,
+                    username,
+                    language,
+                    self.max_turns,
+                    remaining_turns_int,
+                )
 
-                # Check if any tool was called in this response
+                # AsyncConversation.prompt() doesn't default tools like chain() does
+                if tool_results is not None:
+                    response = self.conversation.prompt(
+                        current_message,
+                        system=system_prompt,
+                        tools=self.tools,
+                        tool_results=tool_results,
+                    )
+                else:
+                    response = self.conversation.prompt(
+                        current_message, system=system_prompt, tools=self.tools
+                    )
+
+                # Get response text and tool calls
+                response_text = await response.text()
                 tool_calls = await response.tool_calls()
 
-                for tool_call in tool_calls:
-                    if tool_call.name == "respond":
-                        # The respond tool was called - extract the user message
-                        respond_tool_called = True
-                        # Get the message parameter from the tool call
-                        if "message" in tool_call.arguments:
-                            response_text = tool_call.arguments["message"]
-                        break
-
-                if respond_tool_called:
+                # No tool calls means agent is done
+                if not tool_calls:
                     break
 
-            # If respond was not called, use the text from the last response
-            if not respond_tool_called:
-                # All responses have been consumed, so we need to get text from conversation
-                if self.conversation.responses:
-                    last_response = self.conversation.responses[-1]
-                    response_text = await last_response.text()
+                # Tools were called - execute them and continue
+                had_tool_calls = True
+                tool_results = await response.execute_tool_calls(
+                    before_call=self._before_tool_call, after_call=self._after_tool_call
+                )
 
-                if not response_text:
-                    response_text = "I ran out of autonomous turns before completing the task. Please provide more specific instructions or break down the task into smaller steps."
+                current_message = ""
+                if self.max_turns > 0:
+                    remaining_turns -= 1
+
+            # Handle case where turns exhausted with pending work
+            if self.max_turns > 0 and remaining_turns <= 0 and had_tool_calls:
+                exhaustion_msg = "I ran out of autonomous turns before completing the task. Here's what I found:\n\n"
+                response_text = exhaustion_msg + (response_text or "")
 
             if not response_text:
                 response_text = "No response generated."
