@@ -185,6 +185,33 @@ class TelegramDriver:
             )
         return self.user_agents[user_id]
 
+    async def file_handler(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Handle file uploads by saving them to the current media subdir."""
+        self.current_update = update
+        self.current_context = context
+
+        user_id = update.effective_user.id
+        self._get_or_create_agent(user_id)
+        media_manager = self.user_media_managers[user_id]
+
+        if not media_manager.current_subdir:
+            await update.message.reply_text("Error: No active media subdirectory")
+            return
+
+        document = update.message.document
+        if not document:
+            await update.message.reply_text("Error: No file found in message")
+            return
+
+        try:
+            file = await context.bot.get_file(document.file_id)
+            file_path = media_manager.current_subdir / document.file_name
+            await file.download_to_drive(file_path)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error saving file: {e}")
+
     async def message_handler(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
@@ -234,6 +261,9 @@ class TelegramDriver:
             raise ValueError("TELEGRAM_BOT_TOKEN not found in environment variables")
 
         app = ApplicationBuilder().token(token).build()
+
+        # Handle file uploads
+        app.add_handler(MessageHandler(filters.Document.ALL, self.file_handler))
 
         # All text messages (including commands) go through the agent
         app.add_handler(MessageHandler(filters.TEXT, self.message_handler))

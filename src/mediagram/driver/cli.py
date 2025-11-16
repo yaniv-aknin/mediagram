@@ -152,7 +152,48 @@ class CLIDriver:
         print("Type your messages or use commands:")
         print("  /help - Show all available commands")
         print("  /quit or /exit - Exit the program")
+        print("  @/absolute/path/to/file - Copy a file to the current media directory")
         print()
+
+    def _handle_file_input(self, file_path_str: str) -> bool:
+        """Handle @ prefixed file input. Returns True if handled, False otherwise."""
+        if not file_path_str.startswith("@"):
+            return False
+
+        source_path_str = file_path_str[1:].strip()
+        if not source_path_str:
+            print("Error: No file path provided after '@'")
+            return True
+
+        source_path = Path(source_path_str)
+
+        if not source_path.is_absolute():
+            print(f"Error: Path must be absolute, got: {source_path_str}")
+            return True
+
+        if not source_path.exists():
+            print(f"Error: File does not exist: {source_path_str}")
+            return True
+
+        if not source_path.is_file():
+            print(f"Error: Path is not a file: {source_path_str}")
+            return True
+
+        if not self.media_manager.current_subdir:
+            print("Error: No active media subdirectory")
+            return True
+
+        try:
+            dest_path = self.media_manager.current_subdir / source_path.name
+            shutil.copy2(source_path, dest_path)
+            file_size_kb = dest_path.stat().st_size / 1024
+            print(
+                f"✅ Copied {source_path.name} ({file_size_kb:.1f}KB) to media directory"
+            )
+        except Exception as e:
+            print(f"❌ Error copying file: {e}")
+
+        return True
 
     async def run_async(self) -> None:
         self._print_welcome()
@@ -173,6 +214,10 @@ class CLIDriver:
                     if user_input.strip() in ["/quit", "/exit"]:
                         print("Goodbye!")
                         break
+
+                    # Handle @ prefix for file copying
+                    if self._handle_file_input(user_input.strip()):
+                        continue
 
                     # Let agent handle the message (commands or regular messages)
                     response = await self.agent.handle_message(
