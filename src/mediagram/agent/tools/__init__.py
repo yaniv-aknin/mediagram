@@ -1,9 +1,9 @@
 import asyncio
 import contextvars
 import functools
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
-from ..callbacks import ProgressMessage, SuccessMessage, ErrorMessage
+from ..callbacks import ProgressMessage, SuccessMessage, ErrorMessage, StartMessage
 from mediagram.config import DEFAULT_TOOL_OUTPUT_LIMIT
 
 if TYPE_CHECKING:
@@ -22,6 +22,10 @@ _tool_subdir: contextvars.ContextVar["Path | None"] = contextvars.ContextVar(
 
 _tool_output_limit: contextvars.ContextVar[int] = contextvars.ContextVar(
     "tool_output_limit", default=DEFAULT_TOOL_OUTPUT_LIMIT
+)
+
+_log_message: contextvars.ContextVar["Callable | None"] = contextvars.ContextVar(
+    "log_message", default=None
 )
 
 
@@ -55,6 +59,16 @@ def get_tool_output_limit() -> int:
     return _tool_output_limit.get()
 
 
+def set_log_message(log_message: "Callable") -> None:
+    """Set the log_message function for tool execution."""
+    _log_message.set(log_message)
+
+
+def get_log_message() -> "Callable | None":
+    """Get the current log_message function."""
+    return _log_message.get()
+
+
 def tool(f):
     """Decorator that wraps a tool function to handle the iterator protocol.
 
@@ -71,6 +85,22 @@ def tool(f):
         callbacks = get_driver_callbacks()
         tool_id = f"tool_{f.__name__}_{id(asyncio.current_task())}"
         final_message: SuccessMessage | ErrorMessage | None = None
+
+        # Emit StartMessage before tool execution
+        start_message = StartMessage(
+            tool_name=f.__name__, invocation_details={"args": args, "kwargs": kwargs}
+        )
+        if callbacks:
+            await callbacks.on_tool_start(start_message, tool_id)
+
+        # Log start message to .messages.jsonl
+        log_message = get_log_message()
+        if log_message:
+            log_message(
+                role="tool_start",
+                content={"tool_name": f.__name__, "args": args, "kwargs": kwargs},
+                tool_id=tool_id,
+            )
 
         try:
             async for message in f(*args, **kwargs):
@@ -103,6 +133,12 @@ def tool(f):
         except ErrorMessage as e:
             if callbacks:
                 await callbacks.on_tool_error(e, tool_id)
+            if log_message:
+                log_message(
+                    role="tool_result",
+                    content={"result": e.text, "status": "error"},
+                    tool_id=tool_id,
+                )
             return e.text
         except Exception as e:
             error = ErrorMessage(
@@ -112,6 +148,16 @@ def tool(f):
             )
             if callbacks:
                 await callbacks.on_tool_error(error, tool_id)
+            if log_message:
+                log_message(
+                    role="tool_result",
+                    content={
+                        "result": error.text,
+                        "status": "error",
+                        "unexpected": True,
+                    },
+                    tool_id=tool_id,
+                )
             return error.text
 
         if final_message is None:
@@ -121,7 +167,26 @@ def tool(f):
             )
             if callbacks:
                 await callbacks.on_tool_error(error, tool_id)
+            if log_message:
+                log_message(
+                    role="tool_result",
+                    content={"result": error.text, "status": "error"},
+                    tool_id=tool_id,
+                )
             return error.text
+
+        # Log tool result to .messages.jsonl
+        if log_message:
+            log_message(
+                role="tool_result",
+                content={
+                    "result": final_message.text,
+                    "status": "success"
+                    if isinstance(final_message, SuccessMessage)
+                    else "error",
+                },
+                tool_id=tool_id,
+            )
 
         return final_message.text
 

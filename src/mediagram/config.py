@@ -16,6 +16,7 @@ DEFAULT_MODEL = "haiku"
 DEFAULT_MAX_TURNS = 10
 DEFAULT_TOOL_OUTPUT_LIMIT = 16384  # 16K characters
 MIN_TOOL_OUTPUT_LIMIT = 128
+DEFAULT_TOOL_DETAILS = False
 
 
 def patch_docstring(func):
@@ -39,6 +40,7 @@ class CommonOptions:
     media_dir: str | None = None
     max_turns: int = DEFAULT_MAX_TURNS
     tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT
+    tool_details: bool = DEFAULT_TOOL_DETAILS
 
 
 # Shared option type annotations for consistency
@@ -54,6 +56,13 @@ ToolOutputLimitOption = Annotated[
     typer.Option(
         "--tool-limit",
         help=f"Maximum tool output size in characters (min {MIN_TOOL_OUTPUT_LIMIT})",
+    ),
+]
+ToolDetailsOption = Annotated[
+    bool,
+    typer.Option(
+        "--tool-details/--no-tool-details",
+        help="Show detailed tool invocation information",
     ),
 ]
 

@@ -27,8 +27,20 @@ class ErrorMessage(Exception):
     unexpected: bool = False
 
 
+@dataclass
+class StartMessage:
+    """Start notification from a tool."""
+
+    tool_name: str
+    invocation_details: dict
+
+
 class DriverCallbacks(Protocol):
     """Protocol that drivers must implement to receive tool callbacks."""
+
+    async def on_tool_start(self, start: StartMessage, tool_id: str) -> None:
+        """Called when a tool starts executing."""
+        ...
 
     async def on_tool_progress(self, progress: ProgressMessage, tool_id: str) -> None:
         """Called when a tool reports progress."""

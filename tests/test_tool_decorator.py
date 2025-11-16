@@ -1,14 +1,23 @@
 import pytest
 
 from mediagram.agent.tools import tool, set_driver_callbacks
-from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
+from mediagram.agent.callbacks import (
+    ProgressMessage,
+    SuccessMessage,
+    ErrorMessage,
+    StartMessage,
+)
 
 
 class MockCallbacks:
     def __init__(self):
+        self.starts = []
         self.progress = []
         self.success = []
         self.errors = []
+
+    async def on_tool_start(self, start: StartMessage, tool_id: str) -> None:
+        self.starts.append(start)
 
     async def on_tool_progress(self, progress: ProgressMessage, tool_id: str) -> None:
         self.progress.append(progress)

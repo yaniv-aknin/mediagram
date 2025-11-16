@@ -198,3 +198,21 @@ def cmd_tool_output_limit(agent: "Agent", args: list[str]) -> AgentResponse:
         return AgentResponse(
             text=f"Error: limit must be a number (minimum {MIN_TOOL_OUTPUT_LIMIT})"
         )
+
+
+@command("tdetails")
+def cmd_tool_details(agent: "Agent", args: list[str]) -> AgentResponse:
+    """Get or set tool details display (usage: /tdetails [on|off])"""
+    if not args:
+        status = "on" if agent.tool_details else "off"
+        return AgentResponse(text=f"Tool details: {status}")
+
+    arg = args[0].lower()
+    if arg == "on":
+        agent.tool_details = True
+        return AgentResponse(text="Tool details enabled")
+    elif arg == "off":
+        agent.tool_details = False
+        return AgentResponse(text="Tool details disabled")
+    else:
+        return AgentResponse(text="Error: argument must be 'on' or 'off'")

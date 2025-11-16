@@ -9,6 +9,7 @@ from mediagram.config import (
     AVAILABLE_MODELS,
     DEFAULT_MAX_TURNS,
     DEFAULT_TOOL_OUTPUT_LIMIT,
+    DEFAULT_TOOL_DETAILS,
 )
 
 if TYPE_CHECKING:
@@ -66,6 +67,7 @@ class Agent:
         driver_callbacks: "DriverCallbacks | None" = None,
         max_turns: int = DEFAULT_MAX_TURNS,
         tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT,
+        tool_details: bool = DEFAULT_TOOL_DETAILS,
     ):
         self.model_name = model_name
         self.model_id = AVAILABLE_MODELS[model_name]
@@ -74,6 +76,7 @@ class Agent:
         self.media_manager = media_manager
         self.max_turns = max_turns
         self.tool_output_limit = tool_output_limit
+        self.tool_details = tool_details
         self.tools = list(ALL_TOOLS)
         self.conversation = self.model.conversation(
             tools=self.tools,
@@ -89,7 +92,12 @@ class Agent:
 
     async def _before_tool_call(self, tool, tool_call):
         """Hook called before a tool is executed."""
-        from .tools import set_driver_callbacks, set_tool_subdir, set_tool_output_limit
+        from .tools import (
+            set_driver_callbacks,
+            set_tool_subdir,
+            set_tool_output_limit,
+            set_log_message,
+        )
 
         if self.driver_callbacks:
             set_driver_callbacks(self.driver_callbacks)
@@ -98,6 +106,7 @@ class Agent:
             set_tool_subdir(self.media_manager.current_subdir)
 
         set_tool_output_limit(self.tool_output_limit)
+        set_log_message(self.media_manager.log_message)
 
     async def _after_tool_call(self, tool, tool_call, tool_result):
         """Hook called after a tool is executed."""

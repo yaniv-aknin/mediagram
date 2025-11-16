@@ -7,8 +7,10 @@ from mediagram.config import (
     MediaDirOption,
     TurnsOption,
     ToolOutputLimitOption,
+    ToolDetailsOption,
     DEFAULT_MAX_TURNS,
     DEFAULT_TOOL_OUTPUT_LIMIT,
+    DEFAULT_TOOL_DETAILS,
     load_environment,
 )
 from mediagram.driver import cli
@@ -24,6 +26,7 @@ def main(
     media_dir: MediaDirOption = None,
     turns: TurnsOption = DEFAULT_MAX_TURNS,
     tool_output_limit: ToolOutputLimitOption = DEFAULT_TOOL_OUTPUT_LIMIT,
+    tool_details: ToolDetailsOption = DEFAULT_TOOL_DETAILS,
     messages: Annotated[
         list[str] | None, typer.Argument(help="Optional messages to send")
     ] = None,
@@ -39,6 +42,7 @@ def main(
             input_source=input_source,
             max_turns=turns,
             tool_output_limit=tool_output_limit,
+            tool_details=tool_details,
         )
     else:
         cli.run(
@@ -46,6 +50,7 @@ def main(
             media_dir_override=media_dir,
             max_turns=turns,
             tool_output_limit=tool_output_limit,
+            tool_details=tool_details,
         )
 
 

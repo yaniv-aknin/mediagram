@@ -11,9 +11,18 @@ from telegram.ext import (
 )
 
 from mediagram.agent import Agent
-from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
+from mediagram.agent.callbacks import (
+    ProgressMessage,
+    SuccessMessage,
+    ErrorMessage,
+    StartMessage,
+)
 from mediagram.media import MediaManager
-from mediagram.config import DEFAULT_MAX_TURNS, DEFAULT_TOOL_OUTPUT_LIMIT
+from mediagram.config import (
+    DEFAULT_MAX_TURNS,
+    DEFAULT_TOOL_OUTPUT_LIMIT,
+    DEFAULT_TOOL_DETAILS,
+)
 from .html import convert_to_telegram_html
 
 
@@ -26,16 +35,37 @@ class TelegramDriver:
         media_dir_override: str | None = None,
         max_turns: int = DEFAULT_MAX_TURNS,
         tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT,
+        tool_details: bool = DEFAULT_TOOL_DETAILS,
     ):
         self.default_model = default_model
         self.media_dir_override = media_dir_override
         self.max_turns = max_turns
         self.tool_output_limit = tool_output_limit
+        self.tool_details = tool_details
         self.user_agents: dict[int, Agent] = {}
         self.user_media_managers: dict[int, MediaManager] = {}
         self.current_update: Update | None = None
         self.current_context: ContextTypes.DEFAULT_TYPE | None = None
         self.progress_messages: dict[str, int] = {}
+
+    async def on_tool_start(self, start: StartMessage, tool_id: str) -> None:
+        """Handle tool start notification."""
+        if not self.current_update or not self.current_context:
+            return
+
+        try:
+            if self.tool_details:
+                details = f" - args: {start.invocation_details['args']}, kwargs: {start.invocation_details['kwargs']}"
+                message = f"🔧 Starting {start.tool_name}{details}"
+            else:
+                message = f"🔧 Starting {start.tool_name}"
+
+            sent = await self.current_context.bot.send_message(
+                chat_id=self.current_update.effective_chat.id, text=message
+            )
+            self.progress_messages[tool_id] = sent.message_id
+        except TelegramError:
+            pass
 
     async def on_tool_progress(self, progress: ProgressMessage, tool_id: str) -> None:
         """Handle tool progress updates."""
@@ -119,6 +149,7 @@ class TelegramDriver:
                 driver_callbacks=self,
                 max_turns=self.max_turns,
                 tool_output_limit=self.tool_output_limit,
+                tool_details=self.tool_details,
             )
         return self.user_agents[user_id]
 
@@ -184,11 +215,13 @@ def run(
     media_dir_override: str | None = None,
     max_turns: int = DEFAULT_MAX_TURNS,
     tool_output_limit: int = DEFAULT_TOOL_OUTPUT_LIMIT,
+    tool_details: bool = DEFAULT_TOOL_DETAILS,
 ) -> None:
     driver = TelegramDriver(
         default_model=model,
         media_dir_override=media_dir_override,
         max_turns=max_turns,
         tool_output_limit=tool_output_limit,
+        tool_details=tool_details,
     )
     driver.run()
