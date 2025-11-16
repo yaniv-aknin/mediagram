@@ -64,8 +64,29 @@ def test_media_manager_rename_subdir_no_name():
         assert permanent_subdir.exists()
 
 
-def test_media_manager_ephemeral_tmpdir(capsys):
-    """Test ephemeral tmpdir fallback with cleanup."""
+def test_media_manager_ephemeral_tmpdir(capsys, monkeypatch, tmp_path):
+    """Test ephemeral tmpdir fallback with cleanup when no persistent dirs exist."""
+    from pathlib import Path
+
+    # Create a fake home without .mediagram.d/media
+    fake_home = tmp_path / "fake_home"
+    fake_home.mkdir()
+
+    # Patch Path.home() in the media module
+    monkeypatch.setattr("mediagram.media.Path.home", lambda: fake_home)
+
+    # Create a mock for Path that returns non-existent for /media
+    original_path_class = Path
+
+    class MockPath(type(Path())):
+        def __new__(cls, *args):
+            if args and str(args[0]) == "/media":
+                # Return a path that doesn't exist
+                return original_path_class(tmp_path / "nonexistent_media")
+            return original_path_class(*args)
+
+    monkeypatch.setattr("mediagram.media.Path", MockPath)
+
     manager = MediaManager.create()
     tmpdir = manager.media_dir
 

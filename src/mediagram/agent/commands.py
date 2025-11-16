@@ -233,7 +233,8 @@ def _ensure_contained(agent: "Agent", path: str) -> Path:
         raise ValueError("No active media subdirectory")
 
     resolved = (subdir / path).resolve()
-    if not str(resolved).startswith(str(subdir)):
+    subdir_resolved = subdir.resolve()
+    if not str(resolved).startswith(str(subdir_resolved)):
         raise ValueError(f"Path {path} escapes subdir containment")
 
     return resolved

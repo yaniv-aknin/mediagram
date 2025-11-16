@@ -14,9 +14,7 @@ def test_cli_help_command():
     with tempfile.TemporaryDirectory() as tmpdir:
         media_dir = Path(tmpdir)
 
-        result = runner.invoke(
-            app, ["--media-dir", str(media_dir), "/help", "Hello there"]
-        )
+        result = runner.invoke(app, ["--media-dir", str(media_dir), "/help"])
 
         assert result.exit_code == 0
         assert "Available commands:" in result.stdout
