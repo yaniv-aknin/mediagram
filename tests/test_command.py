@@ -1,11 +1,7 @@
 from unittest.mock import patch
 
-from mediagram.agent import (
-    get_user_info_text,
-    render_system_prompt,
-    CommandRouter,
-    AgentResponse,
-)
+from mediagram.agent import get_user_info_text, render_system_prompt
+from mediagram.agent.commands import CommandRouter, AgentResponse
 
 
 def test_get_user_info_text_full():
@@ -34,35 +30,35 @@ def test_render_system_prompt():
     assert "2024-01-15 10:30:00" in result
 
 
-def test_command_router_register_and_route():
-    """Test command registration and routing."""
-    router = CommandRouter()
+def test_command_router_register_and_handle():
+    """Test command registration and handling."""
+    router = CommandRouter(lambda **kwargs: None)
 
-    def mock_handler(args):
+    def mock_handler(agent, args):
         return AgentResponse(text=f"Handler called with {args}")
 
-    router.register("test", mock_handler)
-    result = router.route("test", ["arg1", "arg2"], None)
+    CommandRouter.register("test", mock_handler)
+    result = router.handle("/test arg1 arg2", None)
 
     assert result.text == "Handler called with ['arg1', 'arg2']"
 
 
 def test_command_router_help():
     """Test help generation from registered commands."""
-    router = CommandRouter()
+    router = CommandRouter(lambda **kwargs: None)
 
-    def cmd1(args):
+    def cmd1(agent, args):
         """First command"""
         pass
 
-    def cmd2(args):
+    def cmd2(agent, args):
         """Second command"""
         pass
 
-    router.register("cmd1", cmd1)
-    router.register("cmd2", cmd2)
+    CommandRouter.register("cmd1", cmd1)
+    CommandRouter.register("cmd2", cmd2)
 
-    result = router.route("help", [], None)
+    result = router.handle("/help", None)
     assert "Available commands:" in result.text
     assert "/cmd1 - First command" in result.text
     assert "/cmd2 - Second command" in result.text
@@ -70,8 +66,8 @@ def test_command_router_help():
 
 def test_command_router_unknown_command():
     """Test handling of unknown commands."""
-    router = CommandRouter()
-    result = router.route("nonexistent", [], None)
+    router = CommandRouter(lambda **kwargs: None)
+    result = router.handle("/nonexistent_unique_test", None)
 
-    assert "Unknown command: /nonexistent" in result.text
+    assert "Unknown command: /nonexistent_unique_test" in result.text
     assert "Available commands:" in result.text
