@@ -7,7 +7,12 @@ from typing_extensions import Annotated
 
 from mediagram.config import load_environment
 from mediagram.agent.tools import ALL_TOOLS, set_driver_callbacks
-from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
+from mediagram.agent.callbacks import (
+    ProgressMessage,
+    SuccessMessage,
+    ErrorMessage,
+    StartMessage,
+)
 
 load_environment()
 
@@ -18,6 +23,10 @@ _global_cwd = "."
 
 class ToolCLICallbacks:
     """Simple callbacks for tool CLI that prints progress to stdout."""
+
+    async def on_tool_start(self, start: StartMessage, tool_id: str) -> None:
+        """Handle tool start."""
+        pass
 
     async def on_tool_progress(self, progress: ProgressMessage, tool_id: str) -> None:
         """Handle tool progress updates."""

@@ -219,3 +219,4 @@ from .filesystem import listdir, grep, rename  # noqa: F401, E402
 from .media import ffmpeg, youtube_download  # noqa: F401, E402
 from .llm import llm  # noqa: F401, E402
 from .assemblyai import transcribe  # noqa: F401, E402
+from .http import http_fetch  # noqa: F401, E402
