@@ -26,7 +26,7 @@ RUN mkdir -p /workspace && chown agent:agent /workspace
 USER agent
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | bash
-RUN /home/agent/.local/bin/uv python install
+RUN /home/agent/.local/bin/uv python install 3.13
 
 ENV PATH="/home/agent/.local/bin:${PATH}"
 

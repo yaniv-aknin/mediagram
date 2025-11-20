@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def main():
-    cmd = ["docker", "run", "-it", "--rm"]
+    cmd = ["docker", "run", "--rm"]
 
     local_env = Path(".env")
     if local_env.exists():
