@@ -1,7 +1,7 @@
 import os
 import mistune
 from pathlib import Path
-from telegram import Update
+from telegram import Update, BotCommand
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import (
@@ -18,6 +18,7 @@ from mediagram.agent.callbacks import (
     ErrorMessage,
     StartMessage,
 )
+from mediagram.agent.commands import CommandRouter
 from mediagram.media import MediaManager
 from mediagram.config import (
     DEFAULT_MAX_TURNS,
@@ -185,6 +186,24 @@ class TelegramDriver:
             )
         return self.user_agents[user_id]
 
+    def _get_telegram_commands(self) -> list[BotCommand]:
+        """Build list of BotCommand objects from registered command handlers."""
+        commands = []
+        dummy_media_manager = MediaManager.create(self.media_dir_override)
+        router = CommandRouter(dummy_media_manager.log_message)
+
+        for name, handler in sorted(router.commands.items()):
+            doc = handler.__doc__ or "No description"
+            description = doc.strip().split("\n")[0]
+            if len(description) > 256:
+                description = description[:253] + "..."
+            commands.append(BotCommand(command=name, description=description))
+
+        commands.append(
+            BotCommand(command="help", description="Show all available commands")
+        )
+        return commands
+
     async def file_handler(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
@@ -255,12 +274,21 @@ class TelegramDriver:
                 f"⚠️ There was an error processing your request: {e}"
             )
 
+    async def post_init(self, application) -> None:
+        """Register commands with Telegram after bot initialization."""
+        commands = self._get_telegram_commands()
+        try:
+            await application.bot.set_my_commands(commands)
+            print(f"Registered {len(commands)} commands with Telegram")
+        except Exception as e:
+            print(f"Warning: Failed to register commands with Telegram: {e}")
+
     def run(self) -> None:
         token = os.getenv("TELEGRAM_BOT_TOKEN")
         if not token:
             raise ValueError("TELEGRAM_BOT_TOKEN not found in environment variables")
 
-        app = ApplicationBuilder().token(token).build()
+        app = ApplicationBuilder().token(token).post_init(self.post_init).build()
 
         # Handle file uploads
         app.add_handler(MessageHandler(filters.Document.ALL, self.file_handler))
