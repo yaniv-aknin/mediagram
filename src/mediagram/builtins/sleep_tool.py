@@ -1,7 +1,10 @@
+"""Built-in sleep tool plugin."""
+
 import asyncio
 
-from ..callbacks import ProgressMessage, SuccessMessage, ErrorMessage
-from . import tool
+from mediagram.agent.callbacks import ProgressMessage, SuccessMessage, ErrorMessage
+from mediagram.agent.tools import tool
+from mediagram import hookimpl
 
 
 @tool
@@ -46,3 +49,9 @@ async def sleep(duration_seconds: float, update_count: int, success: bool):
         )
     else:
         yield ErrorMessage("Test tool failed as requested")
+
+
+@hookimpl
+def register_tools(register):
+    """Register the sleep tool."""
+    register(sleep)

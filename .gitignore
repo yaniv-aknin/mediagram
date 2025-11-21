@@ -9,5 +9,13 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# Dependency sources, for reference
 code/
+
+# Media samples
 samples/
+
+# Built plugins and their source code
+dist-plugins/
+plugins/

@@ -3,7 +3,7 @@ from importlib.resources import files
 from typing import TYPE_CHECKING
 import llm
 
-from .tools import ALL_TOOLS
+from .tools import ALL_TOOLS, load_tools
 from .commands import CommandRouter, AgentResponse
 from mediagram.config import (
     AVAILABLE_MODELS,
@@ -77,6 +77,7 @@ class Agent:
         self.max_turns = max_turns
         self.tool_output_limit = tool_output_limit
         self.tool_details = tool_details
+        load_tools()
         self.tools = list(ALL_TOOLS)
         self.conversation = self.model.conversation(
             tools=self.tools,

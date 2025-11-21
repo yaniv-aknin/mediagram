@@ -213,10 +213,15 @@ async def _process_message(
         raise TypeError(f"Unexpected message type: {type(message)}")
 
 
-# Import tools to trigger @tool decorator registration
-from .sleep import sleep  # noqa: F401, E402
-from .filesystem import listdir, grep, rename  # noqa: F401, E402
-from .media import ffmpeg, youtube_download  # noqa: F401, E402
-from .llm import llm  # noqa: F401, E402
-from .assemblyai import transcribe  # noqa: F401, E402
-from .http import http_fetch  # noqa: F401, E402
+def load_tools():
+    """Load all tools from plugins."""
+    from mediagram.plugins import load_plugins, pm
+
+    load_plugins()
+
+    def register(tool_func):
+        """Register a tool function."""
+        if tool_func not in ALL_TOOLS:
+            ALL_TOOLS.append(tool_func)
+
+    pm.hook.register_tools(register=register)

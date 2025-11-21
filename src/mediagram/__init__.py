@@ -13,6 +13,9 @@ from mediagram.config import (
     DEFAULT_TOOL_OUTPUT_LIMIT,
     load_environment,
 )
+from mediagram.hookspecs import hookimpl
+
+__all__ = ["hookimpl"]
 
 
 class DriverChoice(str, Enum):

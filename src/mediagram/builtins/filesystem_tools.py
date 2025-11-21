@@ -1,8 +1,11 @@
+"""Built-in filesystem tools plugin."""
+
 import re
 from pathlib import Path
 
-from ..callbacks import SuccessMessage, ErrorMessage
-from . import tool, get_tool_subdir
+from mediagram.agent.callbacks import SuccessMessage, ErrorMessage
+from mediagram.agent.tools import tool, get_tool_subdir
+from mediagram import hookimpl
 
 
 def get_subdir_root() -> Path:
@@ -276,3 +279,12 @@ async def rename(old: list[str], new: list[str]):
 
     except ValueError as e:
         yield ErrorMessage(str(e))
+
+
+@hookimpl
+def register_tools(register):
+    """Register filesystem tools."""
+    register(listdir)
+    register(grep)
+    register(read)
+    register(rename)

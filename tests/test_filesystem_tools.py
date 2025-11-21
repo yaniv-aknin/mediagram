@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from mediagram.agent.tools import set_tool_subdir
-from mediagram.agent.tools.filesystem import listdir, grep, rename
+from mediagram.builtins.filesystem_tools import listdir, grep, rename
 
 
 @pytest.fixture

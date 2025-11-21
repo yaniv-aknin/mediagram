@@ -33,6 +33,30 @@ ENV PATH="/home/agent/.local/bin:${PATH}"
 COPY --chown=agent:agent dist/*.whl /tmp/
 RUN uv tool install /tmp/*.whl && rm /tmp/*.whl
 
+# Install local plugin wheels if any were built
+COPY --chown=agent:agent dist-plugins* /tmp/plugin-wheels/
+RUN if [ -d /tmp/plugin-wheels ] && [ "$(ls -A /tmp/plugin-wheels 2>/dev/null)" ]; then \
+    echo "Installing local plugin wheels:" && \
+    ls -lh /tmp/plugin-wheels/ && \
+    for wheel in /tmp/plugin-wheels/*.whl /tmp/plugin-wheels/*.tar.gz; do \
+        if [ -f "$wheel" ]; then \
+            echo "  Installing: $(basename $wheel)" && \
+            uvx --from mediagram mediagram plugin install "$wheel"; \
+        fi \
+    done && \
+    rm -rf /tmp/plugin-wheels; \
+    fi
+
+# Install remote plugins if provided (PyPI packages or URLs)
+ARG REMOTE_PLUGINS
+RUN if [ -n "$REMOTE_PLUGINS" ]; then \
+    echo "Installing remote plugins: $REMOTE_PLUGINS" && \
+    for plugin in $REMOTE_PLUGINS; do \
+        echo "  Installing: $plugin" && \
+        uvx --from mediagram mediagram plugin install "$plugin"; \
+    done; \
+    fi
+
 SHELL ["/bin/bash", "-c"]
 WORKDIR /workspace
 CMD ["mediagram.telegram"]

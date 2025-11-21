@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
+import argparse
 import subprocess
 import sys
 from pathlib import Path
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Run mediagram container")
+    parser.add_argument(
+        "-i", "--interactive", action="store_true", help="Drop into interactive shell"
+    )
+    args = parser.parse_args()
+
     cmd = ["docker", "run", "--rm"]
+
+    if args.interactive:
+        cmd.append("-it")
 
     local_env = Path(".env")
     if local_env.exists():
@@ -24,6 +34,11 @@ def main():
         print(f"Mounting media directory: {resolved_media}")
 
     cmd.append("mediagram")
+
+    if args.interactive:
+        cmd.append("/bin/bash")
+    else:
+        cmd.extend(["mediagram", "run", "telegram"])
 
     print(f"Running: {' '.join(cmd)}")
     try:
