@@ -112,13 +112,17 @@ def cmd_model(agent: "Agent", args_string: str) -> AgentResponse:
 
 @command("tools")
 def cmd_tools(agent: "Agent", args_string: str) -> AgentResponse:
-    """List all available tools"""
+    """List all available tools, or show details for a specific tool (usage: /tools [name])"""
     if not agent.tools:
         return AgentResponse(text="No tools available.")
 
-    lines = ["Available tools:"]
-    for tool in agent.tools:
-        tool_name = tool.__name__
+    tool_name = args_string.strip() if args_string else None
+
+    if tool_name:
+        tool = next((t for t in agent.tools if t.__name__ == tool_name), None)
+        if not tool:
+            return AgentResponse(text=f"Tool '{tool_name}' not found.")
+
         tool_doc = tool.__doc__ or "No description"
         tool_doc_clean = " ".join(line.strip() for line in tool_doc.split("\n"))
 
@@ -131,8 +135,20 @@ def cmd_tools(agent: "Agent", args_string: str) -> AgentResponse:
                 params.append(param_name)
 
         params_str = ", ".join(params)
-        lines.append(f"\n  {tool_name}({params_str})")
-        lines.append(f"    {tool_doc_clean}")
+        return AgentResponse(text=f"{tool_name}({params_str})\n\n{tool_doc_clean}")
+
+    lines = ["Available tools:"]
+    for tool in agent.tools:
+        sig = inspect.signature(tool)
+        params = []
+        for param_name, param in sig.parameters.items():
+            if param.annotation != inspect.Parameter.empty:
+                params.append(f"{param_name}: {_format_annotation(param.annotation)}")
+            else:
+                params.append(param_name)
+
+        params_str = ", ".join(params)
+        lines.append(f"  {tool.__name__}({params_str})")
 
     return AgentResponse(text="\n".join(lines))
 

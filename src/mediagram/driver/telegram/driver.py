@@ -231,6 +231,35 @@ class TelegramDriver:
         except Exception as e:
             await update.message.reply_text(f"❌ Error saving file: {e}")
 
+    def _split_message(self, text: str, max_length: int) -> list[str]:
+        """Split a message into chunks that fit within Telegram's character limit.
+
+        Tries to split at newline boundaries to preserve formatting.
+        """
+        if len(text) <= max_length:
+            return [text]
+
+        chunks = []
+        current_chunk = ""
+
+        for line in text.split("\n"):
+            if not current_chunk:
+                if len(line) <= max_length:
+                    current_chunk = line
+                else:
+                    chunks.append(line[:max_length])
+                    current_chunk = line[max_length:]
+            elif len(current_chunk) + len(line) + 1 <= max_length:
+                current_chunk += "\n" + line
+            else:
+                chunks.append(current_chunk)
+                current_chunk = line
+
+        if current_chunk:
+            chunks.append(current_chunk)
+
+        return chunks
+
     async def message_handler(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
@@ -267,7 +296,15 @@ class TelegramDriver:
             html_text = mistune.html(response.text)
             # Convert to Telegram-compatible HTML using proper HTML parsing
             html_text = convert_to_telegram_html(html_text)
-            await update.message.reply_text(html_text, parse_mode=ParseMode.HTML)
+
+            # Split into chunks if message exceeds Telegram's 4096 character limit
+            max_length = 4096
+            if len(html_text) <= max_length:
+                await update.message.reply_text(html_text, parse_mode=ParseMode.HTML)
+            else:
+                chunks = self._split_message(html_text, max_length)
+                for i, chunk in enumerate(chunks):
+                    await update.message.reply_text(chunk, parse_mode=ParseMode.HTML)
         except TelegramError as e:
             # If HTML rendering fails, show a proper error message
             await update.message.reply_text(

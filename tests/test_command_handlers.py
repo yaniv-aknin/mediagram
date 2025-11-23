@@ -108,6 +108,25 @@ def test_cmd_tools_lists_tools(agent):
     result = cmd_tools(agent, "")
     assert "Available tools:" in result.text
     assert len(agent.tools) > 0
+    for tool in agent.tools:
+        assert f"{tool.__name__}(" in result.text
+
+
+def test_cmd_tools_show_specific_tool(agent):
+    if not agent.tools:
+        return
+
+    tool = agent.tools[0]
+    tool_name = tool.__name__
+
+    result = cmd_tools(agent, tool_name)
+    assert tool_name in result.text
+    assert "Available tools:" not in result.text
+
+
+def test_cmd_tools_unknown_tool(agent):
+    result = cmd_tools(agent, "nonexistent_tool_xyz")
+    assert "not found" in result.text
 
 
 def test_cmd_name_with_custom_name(media_manager, agent):
