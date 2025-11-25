@@ -25,7 +25,9 @@ if local_plugins:
     for plugin in local_plugins:
         print(f"  Building: {plugin}")
         subprocess.run(
-            ["uv", "build", "--out-dir", f"../../{plugin_dist}"], cwd=plugin, check=True
+            ["uv", "build", "--out-dir", str(plugin_dist.absolute())],
+            cwd=plugin,
+            check=True,
         )
     print(
         f"Built local plugin wheels:\n{subprocess.run(['ls', '-lh', plugin_dist], capture_output=True, text=True).stdout}"

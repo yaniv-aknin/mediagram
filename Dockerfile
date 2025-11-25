@@ -30,8 +30,8 @@ RUN /home/agent/.local/bin/uv python install 3.13
 
 ENV PATH="/home/agent/.local/bin:${PATH}"
 
-COPY --chown=agent:agent dist/*.whl /tmp/
-RUN uv tool install /tmp/*.whl && rm /tmp/*.whl
+COPY --chown=agent:agent dist/*.whl /tmp/mediagram-wheel/
+RUN uv tool install /tmp/mediagram-wheel/*.whl && rm -rf /tmp/mediagram-wheel
 
 # Install local plugin wheels if any were built
 COPY --chown=agent:agent dist-plugins* /tmp/plugin-wheels/
@@ -41,7 +41,7 @@ RUN if [ -d /tmp/plugin-wheels ] && [ "$(ls -A /tmp/plugin-wheels 2>/dev/null)" 
     for wheel in /tmp/plugin-wheels/*.whl /tmp/plugin-wheels/*.tar.gz; do \
         if [ -f "$wheel" ]; then \
             echo "  Installing: $(basename $wheel)" && \
-            uvx --from mediagram mediagram plugin install "$wheel"; \
+            mediagram plugin install "$wheel"; \
         fi \
     done && \
     rm -rf /tmp/plugin-wheels; \
@@ -53,7 +53,7 @@ RUN if [ -n "$REMOTE_PLUGINS" ]; then \
     echo "Installing remote plugins: $REMOTE_PLUGINS" && \
     for plugin in $REMOTE_PLUGINS; do \
         echo "  Installing: $plugin" && \
-        uvx --from mediagram mediagram plugin install "$plugin"; \
+        mediagram plugin install "$plugin"; \
     done; \
     fi
 
