@@ -1,0 +1,18 @@
+services:
+  mediagram:
+    image: mediagram
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      # Persistent media storage
+      - mediagram-data:/root/.mediagram.d
+      # Optional: mount custom media directory
+      # - /path/to/your/media:/media:rw
+    command: ["mediagram", "run", "telegram"]
+    # Optional: add additional group permissions if needed
+    # group_add:
+    #   - 1000
+
+volumes:
+  mediagram-data:

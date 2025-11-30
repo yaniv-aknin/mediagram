@@ -32,9 +32,17 @@ Isolation is pretty basic; run in a container for better isolation.
 
 ## Containerization
 
-The `build-container.py` script helps create a container with `mediagram` and plugins installed.
+Build the image -
 
-The `run-container.py` script runs a container, passing bits of `~/.mediagram.d` into the container (environment, mounts, etc).
+```bash
+./build-container.py
+```
+
+Review `docker-compose.yml` and edit to your liking. Then run with docker-compose -
+
+```
+docker-compose up -d
+```
 
 ## Example
 
