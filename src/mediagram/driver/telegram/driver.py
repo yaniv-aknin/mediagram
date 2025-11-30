@@ -1,15 +1,13 @@
 import os
+import time
+import asyncio
 import mistune
 from pathlib import Path
-from telegram import Update, BotCommand
-from telegram.constants import ParseMode
-from telegram.error import TelegramError
-from telegram.ext import (
-    ApplicationBuilder,
-    MessageHandler,
-    filters,
-    ContextTypes,
-)
+from pyrogram import Client, filters
+from pyrogram.types import Message, BotCommand
+from pyrogram.enums import ChatAction, ParseMode
+from pyrogram.errors import RPCError
+from pyrogram.handlers import MessageHandler
 
 from mediagram.agent import Agent
 from mediagram.agent.callbacks import (
@@ -26,11 +24,10 @@ from mediagram.config import (
     DEFAULT_TOOL_DETAILS,
 )
 from .html import convert_to_telegram_html
+from .file_sender import send_file_with_progress
 
 
 class TelegramDriver:
-    """Thin adapter layer for Telegram - handles message routing and formatting."""
-
     def __init__(
         self,
         default_model: str = "haiku",
@@ -46,33 +43,81 @@ class TelegramDriver:
         self.tool_details = tool_details
         self.user_agents: dict[int, Agent] = {}
         self.user_media_managers: dict[int, MediaManager] = {}
-        self.current_update: Update | None = None
-        self.current_context: ContextTypes.DEFAULT_TYPE | None = None
+        self.current_chat_id: int | None = None
+        self.current_message_id: int | None = None
         self.progress_messages: dict[str, int] = {}
+        self.last_action_time: dict[int, float] = {}
+
+        self.api_id = os.getenv("TELEGRAM_API_ID")
+        self.api_hash = os.getenv("TELEGRAM_API_HASH")
+        self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+
+        if not self.api_id or not self.api_hash:
+            raise ValueError(
+                "TELEGRAM_API_ID and TELEGRAM_API_HASH must be set. "
+                "Get them from https://my.telegram.org"
+            )
+        if not self.bot_token:
+            raise ValueError("TELEGRAM_BOT_TOKEN must be set")
+
+        session_dir = Path(
+            os.getenv("PYROGRAM_SESSION", str(Path.home() / ".mediagram.d"))
+        )
+        session_dir.mkdir(parents=True, exist_ok=True)
+        session_path = str(session_dir / "mediagram_bot")
+
+        self.app = Client(
+            session_path,
+            api_id=int(self.api_id),
+            api_hash=self.api_hash,
+            bot_token=self.bot_token,
+        )
+
+    def _register_handlers(self):
+        self.app.add_handler(
+            MessageHandler(self.file_handler, filters.document & filters.private)
+        )
+        self.app.add_handler(
+            MessageHandler(self.message_handler, filters.text & filters.private)
+        )
+
+    async def _refresh_chat_action(self, chat_id: int, action: ChatAction):
+        current_time = time.time()
+        if (
+            chat_id not in self.last_action_time
+            or (current_time - self.last_action_time[chat_id]) >= 4
+        ):
+            try:
+                await self.app.send_chat_action(chat_id, action)
+                self.last_action_time[chat_id] = current_time
+            except RPCError:
+                pass
 
     async def on_tool_start(self, start: StartMessage, tool_id: str) -> None:
-        """Handle tool start notification."""
-        if not self.current_update or not self.current_context:
+        if not self.current_chat_id:
             return
+
+        await self._refresh_chat_action(self.current_chat_id, ChatAction.TYPING)
 
         try:
             if self.tool_details:
                 details = f" - args: {start.invocation_details['args']}, kwargs: {start.invocation_details['kwargs']}"
-                message = f"🔧 Starting {start.tool_name}{details}"
+                message = f"Starting {start.tool_name}{details}"
             else:
-                message = f"🔧 Starting {start.tool_name}"
+                message = f"Starting {start.tool_name}"
 
-            sent = await self.current_context.bot.send_message(
-                chat_id=self.current_update.effective_chat.id, text=message
+            sent = await self.app.send_message(
+                chat_id=self.current_chat_id, text=message
             )
-            self.progress_messages[tool_id] = sent.message_id
-        except TelegramError:
+            self.progress_messages[tool_id] = sent.id
+        except RPCError:
             pass
 
     async def on_tool_progress(self, progress: ProgressMessage, tool_id: str) -> None:
-        """Handle tool progress updates."""
-        if not self.current_update or not self.current_context:
+        if not self.current_chat_id:
             return
+
+        await self._refresh_chat_action(self.current_chat_id, ChatAction.TYPING)
 
         percentage = (
             f" ({progress.completion_ratio * 100:.0f}%)"
@@ -84,89 +129,79 @@ class TelegramDriver:
             if progress.completion_eta_minutes is not None
             else ""
         )
-        message = f"🔄 {progress.text}{percentage}{eta}"
+        message = f"{progress.text}{percentage}{eta}"
 
         try:
             if tool_id in self.progress_messages:
-                await self.current_context.bot.edit_message_text(
-                    chat_id=self.current_update.effective_chat.id,
+                await self.app.edit_message_text(
+                    chat_id=self.current_chat_id,
                     message_id=self.progress_messages[tool_id],
                     text=message,
                 )
             else:
-                sent = await self.current_context.bot.send_message(
-                    chat_id=self.current_update.effective_chat.id, text=message
+                sent = await self.app.send_message(
+                    chat_id=self.current_chat_id, text=message
                 )
-                self.progress_messages[tool_id] = sent.message_id
-        except TelegramError:
+                self.progress_messages[tool_id] = sent.id
+        except RPCError:
             pass
 
     async def on_tool_success(self, success: SuccessMessage, tool_id: str) -> None:
-        """Handle tool success."""
-        if not self.current_update or not self.current_context:
+        if not self.current_chat_id:
             return
 
         try:
             if tool_id in self.progress_messages:
-                await self.current_context.bot.delete_message(
-                    chat_id=self.current_update.effective_chat.id,
-                    message_id=self.progress_messages[tool_id],
+                await self.app.delete_messages(
+                    chat_id=self.current_chat_id,
+                    message_ids=self.progress_messages[tool_id],
                 )
                 del self.progress_messages[tool_id]
-            await self.current_context.bot.send_message(
-                chat_id=self.current_update.effective_chat.id,
-                text=f"✅ {success.text}",
+            await self.app.send_message(
+                chat_id=self.current_chat_id,
+                text=success.text,
             )
-        except TelegramError:
+        except RPCError:
             pass
 
     async def on_tool_error(self, error: ErrorMessage, tool_id: str) -> None:
-        """Handle tool errors."""
-        if not self.current_update or not self.current_context:
+        if not self.current_chat_id:
             return
 
         details = f" - {error.error}" if error.error else ""
         try:
             if tool_id in self.progress_messages:
-                await self.current_context.bot.delete_message(
-                    chat_id=self.current_update.effective_chat.id,
-                    message_id=self.progress_messages[tool_id],
+                await self.app.delete_messages(
+                    chat_id=self.current_chat_id,
+                    message_ids=self.progress_messages[tool_id],
                 )
                 del self.progress_messages[tool_id]
-            await self.current_context.bot.send_message(
-                chat_id=self.current_update.effective_chat.id,
-                text=f"❌ {error.text}{details}",
+            await self.app.send_message(
+                chat_id=self.current_chat_id,
+                text=f"{error.text}{details}",
             )
-        except TelegramError:
+        except RPCError:
             pass
 
     async def send_file_async(self, file_path: Path) -> str:
-        """Send file to user via Telegram (async version)."""
-        if not self.current_update or not self.current_context:
+        if not self.current_chat_id:
             return "Error: cannot send file, no active Telegram context"
 
         try:
-            file_size_kb = file_path.stat().st_size / 1024
-            await self.current_context.bot.send_document(
-                chat_id=self.current_update.effective_chat.id,
-                document=file_path,
-                filename=file_path.name,
+            return await send_file_with_progress(
+                self.app, self.current_chat_id, file_path, self.last_action_time
             )
-            return f"Sent {file_path.name} ({file_size_kb:.1f}KB)"
         except Exception as e:
             return f"Error sending file: {e}"
 
     def send_file(self, file_path: Path) -> str:
-        """Send file to user via Telegram (sync wrapper for command handlers)."""
-        import asyncio
-
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
+            try:
+                asyncio.get_running_loop()
                 asyncio.create_task(self.send_file_async(file_path))
-                file_size_kb = file_path.stat().st_size / 1024
-                return f"Sending {file_path.name} ({file_size_kb:.1f}KB)"
-            else:
+                file_size_mb = file_path.stat().st_size / (1024 * 1024)
+                return f"Sending {file_path.name} ({file_size_mb:.1f}MB)"
+            except RuntimeError:
                 return asyncio.run(self.send_file_async(file_path))
         except Exception as e:
             return f"Error sending file: {e}"
@@ -186,8 +221,7 @@ class TelegramDriver:
             )
         return self.user_agents[user_id]
 
-    def _get_telegram_commands(self) -> list[BotCommand]:
-        """Build list of BotCommand objects from registered command handlers."""
+    async def _register_bot_commands(self):
         commands = []
         dummy_media_manager = MediaManager.create(self.media_dir_override)
         router = CommandRouter(dummy_media_manager.log_message)
@@ -202,40 +236,37 @@ class TelegramDriver:
         commands.append(
             BotCommand(command="help", description="Show all available commands")
         )
-        return commands
 
-    async def file_handler(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        """Handle file uploads by saving them to the current media subdir."""
-        self.current_update = update
-        self.current_context = context
+        try:
+            await self.app.set_bot_commands(commands)
+            print(f"Registered {len(commands)} commands with Telegram")
+        except Exception as e:
+            print(f"Warning: Failed to register commands with Telegram: {e}")
 
-        user_id = update.effective_user.id
+    async def file_handler(self, client: Client, message: Message) -> None:
+        self.current_chat_id = message.chat.id
+        self.current_message_id = message.id
+
+        user_id = message.from_user.id
         self._get_or_create_agent(user_id)
         media_manager = self.user_media_managers[user_id]
 
         if not media_manager.current_subdir:
-            await update.message.reply_text("Error: No active media subdirectory")
+            await message.reply_text("Error: No active media subdirectory")
             return
 
-        document = update.message.document
+        document = message.document
         if not document:
-            await update.message.reply_text("Error: No file found in message")
+            await message.reply_text("Error: No file found in message")
             return
 
         try:
-            file = await context.bot.get_file(document.file_id)
             file_path = media_manager.current_subdir / document.file_name
-            await file.download_to_drive(file_path)
+            await client.download_media(message, file_name=str(file_path))
         except Exception as e:
-            await update.message.reply_text(f"❌ Error saving file: {e}")
+            await message.reply_text(f"Error saving file: {e}")
 
     def _split_message(self, text: str, max_length: int) -> list[str]:
-        """Split a message into chunks that fit within Telegram's character limit.
-
-        Tries to split at newline boundaries to preserve formatting.
-        """
         if len(text) <= max_length:
             return [text]
 
@@ -260,81 +291,60 @@ class TelegramDriver:
 
         return chunks
 
-    async def message_handler(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        """Route message to agent and send response back to Telegram."""
-        self.current_update = update
-        self.current_context = context
+    async def message_handler(self, client: Client, message: Message) -> None:
+        self.current_chat_id = message.chat.id
+        self.current_message_id = message.id
 
-        user_id = update.effective_user.id
-        user_message = update.message.text
-        user = update.effective_user
+        user_id = message.from_user.id
+        user_message = message.text
+        user = message.from_user
 
-        await context.bot.send_chat_action(
-            chat_id=update.effective_chat.id, action="typing"
-        )
+        await client.send_chat_action(message.chat.id, ChatAction.TYPING)
+        self.last_action_time[message.chat.id] = time.time()
 
         agent = self._get_or_create_agent(user_id)
 
-        # Let agent handle the message (commands or regular messages)
+        full_name = user.first_name
+        if user.last_name:
+            full_name += f" {user.last_name}"
+
         response = await agent.handle_message(
             user_message,
-            name=user.full_name,
+            name=full_name,
             username=user.username,
             language=user.language_code,
         )
 
-        # Handle errors
         if response.error:
-            await update.message.reply_text(f"Error: {response.error}")
+            await message.reply_text(f"Error: {response.error}")
             return
 
-        # Convert Markdown to HTML for Telegram
         try:
-            # mistune.html with default settings escapes HTML, preventing arbitrary HTML injection
             html_text = mistune.html(response.text)
-            # Convert to Telegram-compatible HTML using proper HTML parsing
             html_text = convert_to_telegram_html(html_text)
 
-            # Split into chunks if message exceeds Telegram's 4096 character limit
             max_length = 4096
             if len(html_text) <= max_length:
-                await update.message.reply_text(html_text, parse_mode=ParseMode.HTML)
+                await message.reply_text(html_text, parse_mode=ParseMode.HTML)
             else:
                 chunks = self._split_message(html_text, max_length)
-                for i, chunk in enumerate(chunks):
-                    await update.message.reply_text(chunk, parse_mode=ParseMode.HTML)
-        except TelegramError as e:
-            # If HTML rendering fails, show a proper error message
-            await update.message.reply_text(
-                f"⚠️ There was an error processing your request: {e}"
-            )
-
-    async def post_init(self, application) -> None:
-        """Register commands with Telegram after bot initialization."""
-        commands = self._get_telegram_commands()
-        try:
-            await application.bot.set_my_commands(commands)
-            print(f"Registered {len(commands)} commands with Telegram")
-        except Exception as e:
-            print(f"Warning: Failed to register commands with Telegram: {e}")
+                for chunk in chunks:
+                    await message.reply_text(chunk, parse_mode=ParseMode.HTML)
+        except RPCError as e:
+            await message.reply_text(f"Error processing your request: {e}")
 
     def run(self) -> None:
-        token = os.getenv("TELEGRAM_BOT_TOKEN")
-        if not token:
-            raise ValueError("TELEGRAM_BOT_TOKEN not found in environment variables")
-
-        app = ApplicationBuilder().token(token).post_init(self.post_init).build()
-
-        # Handle file uploads
-        app.add_handler(MessageHandler(filters.Document.ALL, self.file_handler))
-
-        # All text messages (including commands) go through the agent
-        app.add_handler(MessageHandler(filters.TEXT, self.message_handler))
+        self._register_handlers()
 
         print(f"Starting Telegram bot with model: {self.default_model}")
-        app.run_polling()
+        print(f"Session file: {self.app.name}.session")
+
+        @self.app.on_message(filters.me, group=-1)
+        async def on_startup(client: Client, _):
+            await self._register_bot_commands()
+            self.app.remove_handler(on_startup, -1)
+
+        self.app.run()
 
 
 def run(

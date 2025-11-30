@@ -332,7 +332,7 @@ def cmd_send(agent: "Agent", args_string: str) -> AgentResponse:
         )
 
     filename = args[0]
-    max_kb = 1024
+    max_kb = 2 * 1024 * 1024
 
     if len(args) > 1:
         try:

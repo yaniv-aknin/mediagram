@@ -10,6 +10,10 @@ wheels/
 .venv
 .env
 
+# Pyrogram session files
+*.session
+*.session-journal
+
 # Dependency sources, for reference
 code/
 
